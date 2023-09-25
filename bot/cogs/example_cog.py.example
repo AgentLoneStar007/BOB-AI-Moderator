@@ -2,20 +2,22 @@
 from discord.ext import commands
 
 
-# Cog class
-class HelpCommand(commands.Cog):
+# Example cog class
+class ExampleCog(commands.Cog, description="Example cog description."):
     def __init__(self, bot):
         self.bot = bot
 
+    # Example listener
     @commands.Cog.listener()
     async def on_ready(self):
         print(f'Extension loaded: {self.__class__.__name__}')
 
+    # Example command
     @commands.command()
-    async def test(self, ctx):
-        await ctx.send("Hello, world!")
+    async def example(self, ctx):
+        await ctx.send("This is an example cog!")
 
 
 async def setup(bot):
-    await bot.add_cog(HelpCommand(bot))
+    await bot.add_cog(ExampleCog(bot))
 
