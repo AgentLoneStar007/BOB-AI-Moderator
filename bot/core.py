@@ -5,6 +5,8 @@ from pretty_help import PrettyHelp, EmojiMenu
 from utils.intents import defIntents
 
 
+# NEED TO DO! Add config loader, add logging functionality
+
 # Variables
 #menu = EmojiMenu(active_time=60)  # PrettyHelp menu
 bot = commands.Bot(command_prefix='!', owner_id='403735483961704450', intents=defIntents(), help_command=PrettyHelp(
