@@ -3,7 +3,7 @@ import discord
 from discord.ext import commands
 
 
-async def sendMessage(bot, ctx, channel_id: str, message: str):
+async def sendMessage(bot, channel_id: str, message: str):
     try:
         # Convert the channel ID to an int
         channel_id = int(channel_id)
@@ -12,17 +12,13 @@ async def sendMessage(bot, ctx, channel_id: str, message: str):
         channel = bot.get_channel(channel_id)
 
         if channel is None:
-            await ctx.send(f'Channel with ID {channel_id} not found.')
+            print(f'Failed to send message to channel ID "{channel_id}." Cannot find channel.')
             return
 
         # Send the message to the target channel
         await channel.send(message)
     except ValueError:
-        await ctx.send('Invalid channel ID.')
-
-
-async def lacksPermissions(ctx):
-    await ctx.send("You don't have permission to use this command.")
+        print(f'Failed to send message to channel ID "{channel_id}." Invalid ID.')
 
 
 async def errorOccurred(ctx, error):

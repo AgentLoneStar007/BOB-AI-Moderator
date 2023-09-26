@@ -1,14 +1,14 @@
 # Imports
 import os.path
-from discord.ext import commands
+from discord.ext import commands, tasks
 import discord
 import re
 from datetime import datetime
 from datetime import timedelta
 import json
 import asyncio
-from utils.logger import log, logCommand, logCogLoad
-from utils.bot_utils import sendMessage, lacksPermissions, errorOccurred
+from utils.logger import log, logCogLoad
+from utils.bot_utils import sendMessage, errorOccurred
 
 
 def loadBlockedWords():
@@ -43,6 +43,8 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
     async def on_ready(self):
         print(f'Extension loaded: {self.__class__.__name__}')
         logCogLoad(self.__class__.__name__)
+        self.checkForNeededUnbans.start()
+        print('Started background task "Check for Needed Unbans."')
 
     # Listener: On Message
     @commands.Cog.listener()
@@ -64,15 +66,56 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
                 # Stop checking for blocked words after the first word is found
                 return
 
+    # Task: Check for users needing to be unbanned
+    @tasks.loop(minutes=5.0)
+    async def checkForNeededUnbans(self):
+        # Open and parse data
+        with open('data/unban_times.json', 'r') as file:
+            data = json.load(file)
+
+        # Get the current UTC time
+        current_time = datetime.utcnow()
+
+        # Iterate through the "temp_banned_users" array and compare times
+        for entry in data.get("temp_banned_users", []):
+            user = entry.get("user")
+            time_to_unban_str = entry.get("time_to_unban")
+
+            # Parse the time string from the entry into a datetime object
+            time_to_unban = datetime.strptime(time_to_unban_str, "%Y-%m-%d %H:%M")
+
+            # Compare the current time with the time in the entry
+            if current_time >= time_to_unban:
+                # Retrieve the user's ID by username (assuming the username is unique in the guild)
+                GUILD_ID = int(os.getenv("LONESTAR_GUILD_ID"))
+                guild = self.bot.get_guild(GUILD_ID)
+                member = discord.utils.get(guild.members, name=user)
+
+                if member:
+                    reason = "Temporary ban on user expired."
+                    # Unban the user by their ID
+                    await guild.unban(member, reason=reason)
+
+                    # Notify that the user has been unbanned
+                    await sendMessage(self.bot, self.bot_output_channel, f'User {user} unbanned.'
+                                                                         f' Reason: "{reason}"')
+
+                else:
+                    # The user was not found in the guild
+                    await sendMessage(self.bot, self.bot_output_channel, f'User {user}\'s temporary ban has '
+                                      f'expired, but could not be found in the guild to unban.')
+            else:
+                return
+
     # Command: Kick
-    @commands.command(help="Kick a user from the server.")
+    @commands.command(help='Kick a user from the server. Syntax: "!kick <user>"')
     @commands.has_permissions(kick_members=True)  # Only allow users with kick permissions to use this command
     async def kick(self, ctx, user: discord.Member, *, reason="No reason was provided."):
         try:
             # Kick the user and log it to #bot-output and to file
             message = f'{user.display_name} has been kicked from the server. Reason: "{reason}"'
             await user.kick(reason=reason)
-            await sendMessage(self.bot, ctx, self.bot_output_channel, message)
+            await sendMessage(self.bot, self.bot_output_channel, message)
             log('info', message)
         except discord.Forbidden:
             await ctx.send('You don\'t have permission to use this command.')
@@ -80,14 +123,14 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
             await ctx.send(f'An error occurred trying to kick user {user}: {e}')
 
     # Command: Ban
-    @commands.command(help='Ban a user from the server..')
+    @commands.command(help='Ban a user from the server. Syntax: "!ban <user>"')
     @commands.has_permissions(ban_members=True)  # Only people with the ban permission can use this command
     async def ban(self, ctx, user: discord.Member, *, reason='No reason was provided.'):
         try:
             # Ban the user and log it to #bot-output and to file
-            message = f'{user.display_name} has been banned from the server. Reason: "{reason}"'
+            message = f'{user.display_name}(ID: {user.id}) has been banned from the server. Reason: "{reason}"'
             await user.ban(reason=reason)
-            await sendMessage(self.bot, ctx, self.bot_output_channel, message)
+            await sendMessage(self.bot, self.bot_output_channel, message)
             log('info', message)
         except discord.Forbidden:
             await ctx.send('You don\'t have permission to use this command.')
@@ -97,7 +140,8 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
     # Command: TempBan
     @commands.command(
         help='Temporarily ban a user from the server. Syntax: "!tempban <user> <duration in minutes> [reason]"')
-    async def tempban(self, ctx, member: discord.Member, duration: int, *, reason="No reason was provided."):
+    @commands.has_permissions(ban_members=True)
+    async def tempban(self, ctx, member: discord.Member, duration: int, *, reason=""):
         try:
             # Get the current time in UTC, get the time that it will be to unban the user, and format it to a string
             current_time = datetime.utcnow()
@@ -106,6 +150,10 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
 
             # Create the dictionary entry
             temp_banned_user = {'user': f'{member}', 'time_to_unban': unban_time}
+
+            # Create the reason (if needed)
+            if reason == "":
+                reason = f"No reason was provided. You will be unbanned on {unban_time} UTC."
 
             # Now log that, along with the temp-banned user to a file (and create the file if it doesn't exist)
             if not os.path.exists('data/unban_times.json'):
@@ -124,26 +172,36 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
             #await member.ban(reason=reason)
             # TODO: (RE-ENABLE BANNING IN TEMPBAN COMMAND!!)
 
-
             # Now log the temp ban in the #bot-output channel, and to file
-            message = f'{member.name} has been temporarily banned till {unban_time}. Reason: "{reason}".'
-            await sendMessage(self.bot, ctx, self.bot_output_channel, message)
+            message = f'{member.mention}(ID: {member.id}) has been temporarily banned till {unban_time}. Reason: "{reason}".'
+            await sendMessage(self.bot, self.bot_output_channel, message)
             log('info', message)
 
-
-
-
-
-
-
-
-
+            #await member.unban(reason="Temporary ban expired.")
             #await ctx.send(f"{member.mention} has been unbanned after {duration} minutes.")
-            # await member.unban(reason="Temporary ban expired")
-        except discord.Forbidden:
-            await lacksPermissions(ctx)
+
         except Exception as e:
             await errorOccurred(ctx, e)
+
+    @commands.command(help='Unbans a user. Syntax: "!unban <user ID>"')
+    @commands.has_permissions(ban_members=True)
+    async def unban(self, ctx, user_id: int):
+        # Get the guild (server) object
+        guild = ctx.guild
+
+        # Check if the user is banned
+        bans = await guild.bans()
+        banned_user = discord.utils.get(bans, user__id=user_id)
+
+        if banned_user:
+            # Unban the user
+            await guild.unban(banned_user.user)
+
+            # Notify that the user has been unbanned
+            await ctx.send(f"User with ID {user_id} has been unbanned.")
+        else:
+            # The user is not banned
+            await ctx.send(f"User with ID {user_id} is not banned.")
 
     # Command: Purge
     @commands.command(help='Delete a specified number of messages. (Limit 100.)')
@@ -152,20 +210,26 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
     async def purge(self, ctx, amount: int):
         # Check if the specified amount is within the allowed range
         if 1 <= amount <= 100:
+            logMessage = f'User {ctx.author} purged {amount} message(s) from channel "{ctx.channel}."'
             # Delete the specified number of messages (including the command message)
             deleted = await ctx.channel.purge(limit=amount + 1)
             # Send a notifying message, then delete it after three seconds.
             if amount == 1:
                 notifying_message = await ctx.send('Deleted the last sent message.')
+                log('info', logMessage)
             else:
                 notifying_message = await ctx.send(f'Deleted the last {len(deleted) - 1} messages.')
+                log('info', logMessage)
             await asyncio.sleep(3)
             await notifying_message.delete()
         else:
+            logMessage = f'User {ctx.author} attempted to purge {amount} message(s) from channel "{ctx.channel}."'
             if amount < 1:
                 await ctx.send('The amount must be at least one.')
+                log('info', logMessage)
             elif amount > 100:
                 await ctx.send("The amount must be under 100.")
+                log('info', logMessage)
 
     @commands.command(help='Reload the list of blocked words.')
     @commands.has_permissions(manage_messages=True)

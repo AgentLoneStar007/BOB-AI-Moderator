@@ -40,7 +40,7 @@ def logsInit():
             if not os.path.exists(logFolder + "/" + currentLog):
                 logFile = currentLog
                 logFound = True
-            logNumber += logNumber
+            logNumber = logNumber + 1
             currentLog = f"{logFileTime}_{str(logNumber)}.log"
 
     if not logFound:
