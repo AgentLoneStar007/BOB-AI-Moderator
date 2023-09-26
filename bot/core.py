@@ -1,14 +1,14 @@
 # Imports
 import discord
 from discord.ext import commands
-from pretty_help import PrettyHelp, EmojiMenu
+from pretty_help import PrettyHelp
 from utils.intents import defIntents
+from utils.logger import logsInit, log
 
 
 # NEED TO DO! Add config loader, add logging functionality
 
 # Variables
-#menu = EmojiMenu(active_time=60)  # PrettyHelp menu
 bot = commands.Bot(command_prefix='!', owner_id='403735483961704450', intents=defIntents(), help_command=PrettyHelp(
     color=discord.Color.from_rgb(1, 162, 186),
     index_title='B.O.B Help Menu',
@@ -20,6 +20,9 @@ custom_status = 'Use "!help" for help.'
 
 
 async def botSetup(bot):
+    # Init log system
+    logsInit()
+
     # Print online message upon connection and set custom status
     @bot.event
     async def on_ready():
@@ -29,5 +32,8 @@ Bot ID: {bot.user.id}
 Custom Status: "{custom_status}"
 ------------------------------
 ''')
+        log('info', 'testing 1 2 3')
         await bot.change_presence(status=discord.Status.online, activity=discord.CustomActivity(custom_status))
+
+
 

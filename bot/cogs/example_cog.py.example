@@ -17,6 +17,17 @@ class ExampleCog(commands.Cog, description="Example cog description."):
     async def example(self, ctx):
         await ctx.send("This is an example cog!")
 
+    # Example slash/Discord interaction command
+    @app_commands.command(name="example", description="Responds with a message.")
+    async def ping(self, interaction: discord.Interaction):
+        await interaction.response.send_message('Example command!', ephemeral=True)
+
+    @commands.command(help="Sync Discord interaction commands.")
+    async def sync(self, ctx) -> None:
+        fmt = await ctx.bot.tree.sync()
+        await ctx.send(f'Synced {len(fmt)} commands.')
+        return
+
 
 async def setup(bot):
     await bot.add_cog(ExampleCog(bot))
