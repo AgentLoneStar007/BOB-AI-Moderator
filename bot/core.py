@@ -32,7 +32,7 @@ Bot ID: {bot.user.id}
 Custom Status: "{custom_status}"
 ------------------------------
 ''')
-        log('info', 'testing 1 2 3')
+        log('info', f'{bot.user.name} online and ready.')
         await bot.change_presence(status=discord.Status.online, activity=discord.CustomActivity(custom_status))
 
 

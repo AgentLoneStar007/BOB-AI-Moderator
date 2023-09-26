@@ -68,3 +68,21 @@ def log(infoType, message):
 
     with open(f'{logFolder}/{logFile}', 'a+') as logFile:
         logFile.write(f'{currentTime} <{infoType}>: {message}\n')
+
+
+def logCommand(user, command, channelID=None):
+    # Set default message
+    message = f'{user} ran command "{command}."'
+
+    # If a channel ID is provided, log it.
+    if channelID:
+        message = f'{user} ran command "{command}" in channel "{channelID}."'
+
+    # Log the command
+    log('info', message)
+
+
+def logCogLoad(cog):
+    # Log the cog init
+    log('info', f'Loaded cog {cog}.')
+

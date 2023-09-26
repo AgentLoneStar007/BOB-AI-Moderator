@@ -2,6 +2,10 @@
 from discord.ext import commands
 import discord
 import re
+import datetime
+from datetime import timedelta
+from utils.logger import log, logCommand, logCogLoad
+from utils.bot_utils import sendMessage
 
 
 def loadBlockedWords():
@@ -15,6 +19,7 @@ def loadBlockedWords():
 class Moderation(commands.Cog, description="Tools for moderators to use."):
     # Define vars
     blocked_words = loadBlockedWords()
+    bot_output_channel = '1155842466482753656'
 
     def __init__(self, bot):
         self.bot = bot
@@ -23,6 +28,7 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
     @commands.Cog.listener()
     async def on_ready(self):
         print(f'Extension loaded: {self.__class__.__name__}')
+        logCogLoad(self.__class__.__name__)
 
     # Listener: On Message
     @commands.Cog.listener()
@@ -34,36 +40,79 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
         message_content = re.sub(r'[^a-zA-Z0-9]', '', message.content.lower())
         for blocked_word in self.blocked_words:
             if re.search(rf'\b{re.escape(blocked_word)}\b', message_content):
-                # Delete the message containing the blocked word
+                # Delete the message containing the blocked word, notify the user, and log the offense
                 await message.delete()
                 await message.author.send(
                     f"{message.author.mention}, your message contains a rule-breaking word or phrase. If this is in "
                     "error, please reach out to a moderator. This is your (temp) offense.")
-                return  # Stop the check after the first word is found
+                log('info', f'User {message.author} sent a message containing a blocked word or phrase.')
+
+                # Stop checking for blocked words after the first word is found
+                return
 
     # Command: Kick
     @commands.command(help="Kick a user from the server.")
     @commands.has_permissions(kick_members=True)  # Only allow users with kick permissions to use this command
-    async def kick(self, ctx, user: discord.Member, *, reason="No reason was provided"):
+    async def kick(self, ctx, user: discord.Member, *, reason="No reason was provided."):
         try:
+            # Kick the user and log it to #bot-output and to file
+            message = f'{user.display_name} has been kicked from the server. Reason: "{reason}"'
             await user.kick(reason=reason)
-            await ctx.send(f'{user.display_name} has been kicked from the server. Reason: "{reason}"')
+            await sendMessage(self.bot, ctx, self.bot_output_channel, message)
+            log('info', message)
         except discord.Forbidden:
             await ctx.send('You don\'t have permission to use this command.')
         except discord.HTTPException as e:
-            await ctx.send(f'An error occurred: {e}')
+            await ctx.send(f'An error occurred trying to kick user {user}: {e}')
 
     # Command: Ban
     @commands.command(help='Ban a user from the server..')
     @commands.has_permissions(ban_members=True)  # Only people with the ban permission can use this command
     async def ban(self, ctx, user: discord.Member, *, reason='No reason was provided.'):
         try:
+            # Ban the user and log it to #bot-output and to file
+            message = f'{user.display_name} has been banned from the server. Reason: "{reason}"'
             await user.ban(reason=reason)
-            await ctx.send(f'{user.display_name} has been banned from the server. Reason: "{reason}"')
+            await sendMessage(self.bot, ctx, self.bot_output_channel, message)
+            log('info', message)
         except discord.Forbidden:
             await ctx.send('You don\'t have permission to use this command.')
         except discord.HTTPException as e:
             await ctx.send(f'An error occurred: {e}')
+
+    # Command: TempBan
+    @commands.command(
+        help='Temporarily ban a user from the server. Syntax: "!tempban <user> <duration in minutes> [reason]"')
+    async def tempban(self, ctx, member: discord.Member, duration: int, *, reason="No reason was provided."):
+        # Calculate the unban time (current time + duration)
+        #unban_time = datetime.utcnow() + timedelta(seconds=duration_seconds)
+
+        try:
+            # Get the current time in UTC, get the time that it will be to unban the user, and format it to a string
+            current_time = datetime.utcnow()
+            future_time = current_time + timedelta(minutes=duration)
+            unban_time = future_time.strftime("%Y-%m-%d %H:%M")
+
+
+
+
+            # await member.ban(reason=reason)
+            #await member.unban(reason="Temporary ban expired")
+
+            # Send a confirmation message
+            #message = f'{member.mention} has been temporarily banned till {duration}. Reason: "{reason}".'
+            #await sendMessage(self.bot, ctx, self.bot_output_channel, message)
+
+
+
+
+
+
+            #await ctx.send(f"{member.mention} has been unbanned after {duration} minutes.")
+        except discord.Forbidden:
+            await ctx.send("I don't have permission to ban members.")
+        except Exception as e:
+            await ctx.send(f"An error occurred: {e}")
 
     # Command: Purge
     @commands.command(help='Delete a specified number of messages. (Limit 100.)')
