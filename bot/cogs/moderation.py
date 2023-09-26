@@ -8,7 +8,7 @@ from datetime import timedelta
 import json
 import asyncio
 from utils.logger import log, logCogLoad
-from utils.bot_utils import sendMessage, errorOccurred
+from utils.bot_utils import sendMessage
 
 
 def loadBlockedWords():
@@ -17,17 +17,6 @@ def loadBlockedWords():
         blocked_words = [line.strip() for line in lines]
         file.close()
     return blocked_words
-
-
-def has_role_or_higher(role_name, role_position):
-    def predicate(ctx):
-        user = ctx.author
-        role = discord.utils.get(user.roles, name=role_name)
-        if role is None:
-            return False
-        return role.position >= ctx.me.top_role.position
-
-    return commands.check(predicate)
 
 
 class Moderation(commands.Cog, description="Tools for moderators to use."):
@@ -70,7 +59,7 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
     @tasks.loop(minutes=5.0)
     async def checkForNeededUnbans(self):
         # Open and parse data
-        with open('data/unban_times.json', 'r') as file:
+        with open('data/moderation/unban_times.json', 'r') as file:
             data = json.load(file)
 
         # Get the current UTC time
@@ -103,7 +92,7 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
                 else:
                     # The user was not found in the guild
                     await sendMessage(self.bot, self.bot_output_channel, f'User {user}\'s temporary ban has '
-                                      f'expired, but could not be found in the guild to unban.')
+                                                                         f'expired, but could not be found in the guild to unban.')
             else:
                 return
 
@@ -142,46 +131,40 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
         help='Temporarily ban a user from the server. Syntax: "!tempban <user> <duration in minutes> [reason]"')
     @commands.has_permissions(ban_members=True)
     async def tempban(self, ctx, member: discord.Member, duration: int, *, reason=""):
-        try:
-            # Get the current time in UTC, get the time that it will be to unban the user, and format it to a string
-            current_time = datetime.utcnow()
-            future_time = current_time + timedelta(minutes=duration)
-            unban_time = future_time.strftime("%Y-%m-%d %H:%M")
 
-            # Create the dictionary entry
-            temp_banned_user = {'user': f'{member}', 'time_to_unban': unban_time}
+        # Get the current time in UTC, get the time that it will be to unban the user, and format it to a string
+        current_time = datetime.utcnow()
+        future_time = current_time + timedelta(minutes=duration)
+        unban_time = future_time.strftime("%Y-%m-%d %H:%M")
 
-            # Create the reason (if needed)
-            if reason == "":
-                reason = f"No reason was provided. You will be unbanned on {unban_time} UTC."
+        # Create the dictionary entry
+        temp_banned_user = {'user': f'{member}', 'time_to_unban': unban_time}
 
-            # Now log that, along with the temp-banned user to a file (and create the file if it doesn't exist)
-            if not os.path.exists('data/unban_times.json'):
-                with open('data/unban_times.json', 'w') as file:
-                    empty_data = {"temp_banned_users": []}
-                    json.dump(empty_data, file, indent=2)
+        # Create the reason (if needed)
+        if reason == "":
+            reason = f"No reason was provided. You will be unbanned on {unban_time} UTC."
 
-            with open('data/unban_times.json', 'r') as file:
-                existing_temp_bans = json.load(file)
-                existing_temp_bans['temp_banned_users'].append(temp_banned_user)
+        # Now log that, along with the temp-banned user to a file (and create the file if it doesn't exist)
+        if not os.path.exists('data/unban_times.json'):
+            with open('data/moderation/unban_times.json', 'w') as file:
+                empty_data = {"temp_banned_users": []}
+                json.dump(empty_data, file, indent=2)
 
-            with open('data/unban_times.json', 'w') as file:
-                json.dump(existing_temp_bans, file, indent=2)
+        with open('data/moderation/unban_times.json', 'r') as file:
+            existing_temp_bans = json.load(file)
+            existing_temp_bans['temp_banned_users'].append(temp_banned_user)
 
-            # Ban the user
-            #await member.ban(reason=reason)
-            # TODO: (RE-ENABLE BANNING IN TEMPBAN COMMAND!!)
+        with open('data/moderation/unban_times.json', 'w') as file:
+            json.dump(existing_temp_bans, file, indent=2)
 
-            # Now log the temp ban in the #bot-output channel, and to file
-            message = f'{member.mention}(ID: {member.id}) has been temporarily banned till {unban_time}. Reason: "{reason}".'
-            await sendMessage(self.bot, self.bot_output_channel, message)
-            log('info', message)
+        # Ban the user
+        # await member.ban(reason=reason)
+        # TODO: (RE-ENABLE BANNING IN TEMPBAN COMMAND!!)
 
-            #await member.unban(reason="Temporary ban expired.")
-            #await ctx.send(f"{member.mention} has been unbanned after {duration} minutes.")
-
-        except Exception as e:
-            await errorOccurred(ctx, e)
+        # Now log the temp ban in the #bot-output channel, and to file
+        message = f'{member.mention}(ID: {member.id}) has been temporarily banned till {unban_time}. Reason: "{reason}".'
+        await sendMessage(self.bot, self.bot_output_channel, message)
+        log('info', message)
 
     @commands.command(help='Unbans a user. Syntax: "!unban <user ID>"')
     @commands.has_permissions(ban_members=True)
@@ -198,10 +181,13 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
             await guild.unban(banned_user.user)
 
             # Notify that the user has been unbanned
-            await ctx.send(f"User with ID {user_id} has been unbanned.")
+            message = f'User with ID "{user_id}" has been unbanned by {ctx.author}.'
+            await sendMessage(self.bot, self.bot_output_channel, message)
+            await log('info', message)
         else:
-            # The user is not banned
-            await ctx.send(f"User with ID {user_id} is not banned.")
+            # Notify that the user is not banned.
+            await ctx.send('That user has not been banned.')
+            log('info', f'{ctx.author} attempted to unban user with ID "{user_id}."')
 
     # Command: Purge
     @commands.command(help='Delete a specified number of messages. (Limit 100.)')
