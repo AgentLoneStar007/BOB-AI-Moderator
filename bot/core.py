@@ -4,6 +4,7 @@ from discord.ext import commands
 from pretty_help import PrettyHelp
 from utils.intents import defIntents
 from utils.logger import logsInit, log
+from utils.bot_utils import errorOccurred
 
 
 # NEED TO DO! Add config loader, add logging functionality
@@ -34,6 +35,22 @@ Custom Status: "{custom_status}"
 ''')
         log('info', f'{bot.user.name} online and ready.')
         await bot.change_presence(status=discord.Status.online, activity=discord.CustomActivity(custom_status))
+
+    # Add a handler for missing command arguments.
+    @bot.event
+    async def on_command_error(ctx, error):
+        if isinstance(error, commands.MissingRequiredArgument):
+            # Handler for missing arguments
+            await ctx.send('You failed to provide some required arguments. Please try again. Use "`!help [command]`"'
+                           ' to see a help page related to that command.')
+        elif isinstance(error, commands.MissingPermissions):
+            # Handler for missing permissions
+            await ctx.send('You don\'t have permission to use this command.')
+        elif isinstance(error, commands.CommandNotFound):
+            # Handler for a non-existent command
+            await ctx.send('That command doesn\'t exist.')
+        else:
+            await errorOccurred(ctx, error)
 
 
 
