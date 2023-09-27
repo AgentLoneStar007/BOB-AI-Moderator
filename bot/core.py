@@ -2,6 +2,7 @@
 import discord
 from discord.ext import commands
 from pretty_help import PrettyHelp
+import wavelink
 from utils.intents import defIntents
 from utils.logger import logsInit, log
 from utils.bot_utils import errorOccurred
@@ -35,6 +36,15 @@ Custom Status: "{custom_status}"
 ''')
         log('info', f'{bot.user.name} online and ready.')
         await bot.change_presence(status=discord.Status.online, activity=discord.CustomActivity(custom_status))
+
+    async def setup_hook(self) -> None:
+        node: wavelink.Node = wavelink.Node(uri='http://localhost:2333', password='youshallnotpass')
+        #sc: spotify.SpotifyClient = spotify.SpotifyClient(
+        #    client_id='...',
+        #    client_secret='...'
+        #)
+
+        await wavelink.NodePool.connect(client=self, nodes=[node])#, spotify=sc
 
     # Add a handler for missing command arguments.
     @bot.event

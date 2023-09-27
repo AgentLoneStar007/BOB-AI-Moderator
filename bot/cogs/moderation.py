@@ -23,6 +23,11 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
     # Define vars
     blocked_words = loadBlockedWords()
     bot_output_channel = '1155842466482753656'
+    user_message_counts_1 = {}
+    user_message_counts_2 = {}
+    user_message_counts_3 = {}
+    message_reset_interval = 30  # in seconds
+    message_limit = 7  # message limit per reset interval
 
     def __init__(self, bot):
         self.bot = bot
@@ -35,6 +40,40 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
         self.checkForNeededUnbans.start()
         print('Started background task "Check for Needed Unbans."')
 
+    # Create functions
+    async def handleSpam(self, user, level: int):
+        user_id = str(user.id)
+
+        if level == 1 and not any(user_id in counts for counts in (self.user_message_counts_2, self.user_message_counts_3)):
+            already_run = False
+            try:
+                del self.user_message_counts_1[user_id]
+            except:
+                already_run = True
+            if not already_run:
+                self.user_message_counts_2[user_id] = 0
+                await user.send('Stop spamming. This is your first warning. '
+                            'You will be muted for five minutes upon your third warning.')
+
+        elif level == 2 and not any(user_id in counts for counts in (self.user_message_counts_1, self.user_message_counts_3)):
+            already_run = False
+            try:
+                del self.user_message_counts_2[user_id]
+            except:
+                already_run = True
+            if not already_run:
+                await user.send('Stop spamming. This is your second warning. '
+                                'You will be muted for five minutes upon your third.')
+                self.user_message_counts_3[user_id] = 0
+
+        elif level == 3 and not any(user_id in counts for counts in (self.user_message_counts_1, self.user_message_counts_2)):
+            await user.send('You have been muted for five minutes.')
+            role = discord.utils.get(user.guild.roles, name="MUTED")
+            await user.add_roles(role)
+            await asyncio.sleep(300)
+            await user.remove_roles(role)
+            del self.user_message_counts_3[user_id]
+
     # Listener: On Message
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -42,6 +81,7 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
         if message.author.bot:
             return
 
+        # Use Regex formatting to search message for blocked words.
         message_content = re.sub(r'[^a-zA-Z0-9]', '', message.content.lower())
         for blocked_word in self.blocked_words:
             if re.search(rf'\b{re.escape(blocked_word)}\b', message_content):
@@ -49,11 +89,53 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
                 await message.delete()
                 await message.author.send(
                     f"{message.author.mention}, your message contains a rule-breaking word or phrase. If this is in "
-                    "error, please reach out to a moderator. This is your (temp) offense.")
+                    "error, please reach out to a moderator. This is your (feature coming soon) offense.")
                 log('info', f'User {message.author} sent a message containing a blocked word or phrase.')
 
                 # Stop checking for blocked words after the first word is found
                 return
+
+        # Make vars accessible without passing self
+        user_message_counts_1 = self.user_message_counts_1
+        user_message_counts_2 = self.user_message_counts_2
+        user_message_counts_3 = self.user_message_counts_3
+        message_reset_interval = self.message_reset_interval
+        message_limit = self.message_limit
+        handleSpam = self.handleSpam
+
+        user_id = str(message.author.id)
+        # Check if the user is not in any dictionary. If not, add them to dictionary 1
+        if not any(
+                user_id in counts for counts in (user_message_counts_1, user_message_counts_2, user_message_counts_3)):
+            user_message_counts_1[user_id] = 0
+
+        # Unoptimized code - fix later
+        if user_id in user_message_counts_1:
+            user_message_counts_1[user_id] += 1
+            if user_message_counts_1[user_id] > message_limit:  # 7 messages per 30 seconds
+                await handleSpam(message.author, 1)
+                return
+            await asyncio.sleep(message_reset_interval)
+            if user_id in user_message_counts_1:
+                user_message_counts_1[user_id] -= 1
+
+        elif user_id in user_message_counts_2:
+            user_message_counts_2[user_id] += 1
+            if user_message_counts_2[user_id] > message_limit:
+                await handleSpam(message.author, 2)
+                return
+            await asyncio.sleep(message_reset_interval * 1.5)
+            if user_id in user_message_counts_2:
+                user_message_counts_2[user_id] -= 1
+
+        elif user_id in user_message_counts_3:
+            user_message_counts_3[user_id] += 1
+            if user_message_counts_3[user_id] > message_limit:
+                await handleSpam(message.author, 3)
+                return
+            await asyncio.sleep(message_reset_interval * 2)
+            if user_id in user_message_counts_3:
+                user_message_counts_3[user_id] -= 1
 
     # Task: Check for users needing to be unbanned
     @tasks.loop(minutes=5.0)
