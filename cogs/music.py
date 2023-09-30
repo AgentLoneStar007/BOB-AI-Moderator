@@ -38,11 +38,8 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
     @commands.Cog.listener()
     async def on_wavelink_track_end(self, player: wavelink.Player):
-        print(player.queue)
-        print(player.queue.is_empty)
-        if not player.queue.is_empty:
-            next_track = player.queue.get()
-            await player.play(next_track)
+        print('amogus')
+        print(player.is_playing())
 
     # Command: Play
     @commands.command(help='Play a song in a voice chat. Syntax: "!play <URL or search term>""')
@@ -69,6 +66,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             player.queue.put(item=track)
 
             # Get time left before song plays
+            print(player.queue)
             time_left = player.current.duration - player.position
             for x in player.queue:
                 time_left = time_left + x.duration
