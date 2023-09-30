@@ -8,13 +8,12 @@ from utils.logger import logsInit, log
 from utils.bot_utils import errorOccurred
 
 
-# NEED TO DO! Add config loader, add logging functionality
+# TODO: Delete this file (no longer necessary; migrated bot main code to main.py)
 
 # Variables
 bot = commands.Bot(command_prefix='!', owner_id='403735483961704450', intents=defIntents(), help_command=PrettyHelp(
     color=discord.Color.from_rgb(1, 162, 186),
     index_title='B.O.B Help Menu',
-    #menu=menu,
     no_category='Miscellaneous Commands',
     thumbnail_url='https://cdn.discordapp.com/avatars/1154825794963640390/ff31b0d57ab76713dba89da69a16fe35.webp?size=4096&width=913&height=913'
 ))
