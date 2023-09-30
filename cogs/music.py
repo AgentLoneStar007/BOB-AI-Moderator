@@ -10,9 +10,9 @@ from utils.logger import logCommand
 
 
 class CustomPlayer(wavelink.Player):
-    def __init__(self):
-        super().__init__()
-        queue = wavelink.Queue
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.queue = wavelink.Queue
 
 
 # Function written by ChatGPT. I know; shut up.
@@ -36,6 +36,14 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
     def __init__(self, bot):
         self.bot = bot
 
+    @commands.Cog.listener()
+    async def on_wavelink_track_end(self, player: wavelink.Player):
+        print(player.queue)
+        print(player.queue.is_empty)
+        if not player.queue.is_empty:
+            next_track = player.queue.get()
+            await player.play(next_track)
+
     # Command: Play
     @commands.command(help='Play a song in a voice chat. Syntax: "!play <URL or search term>""')
     async def play(self, ctx, *, query: str) -> None:
@@ -45,10 +53,9 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             return await ctx.send('You are not connected to a voice channel.')
 
         if not ctx.voice_client:
-            custom_player = CustomPlayer()
-            player: CustomPlayer = await ctx.author.voice.channel.connect(cls=custom_player)
+            player: wavelink.Player = await ctx.author.voice.channel.connect(cls=wavelink.Player)
         else:
-            player: CustomPlayer = ctx.voice_client
+            player: wavelink.Player = ctx.voice_client
             if player.is_playing() and user_vc.channel != ctx.voice_client.channel:
                 return await ctx.send('I am already playing music in another channel.')
 
@@ -75,7 +82,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             )
             embed.add_field(name='Length:', value=convertDuration(track.duration))
             embed.add_field(name='Author:', value=track.author)
-            embed.add_field(name='Estimated Time Before Song Plays:', value=convertDuration(time_left))
+            embed.add_field(name='Time Before Track Plays:', value=convertDuration(time_left))
             embed.set_image(url=track.thumb)
             await ctx.send(embed=embed)
 
@@ -118,13 +125,18 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         else:
             try:
                 # TODO: Do the following to all other commands (bot_vc)
-                player: CustomPlayer = bot_vc
+                player: wavelink.Player = bot_vc
             except:
                 return await ctx.send('No music player is currently running.')
+            # Stop playback is queue is empty
             if player.queue.is_empty:
                 await player.stop()
-                # START BACK WORK HERE!
-                await ctx.send('no music in queue stopping')
+                logCommand(ctx.author, 'skip')
+                return await ctx.send('Playback was stopped because there\'s no remaining songs in the queue.')
+            # Skip current song in queue
+            await player.seek(player.current.duration * 1000)
+            if player.is_paused():
+                await player.resume()
 
     # Command: Stop
     @commands.command(help='Stops the music player, if running.')
@@ -148,7 +160,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         else:
             # See if player is active
             try:
-                player: CustomPlayer = ctx.voice_client
+                player: wavelink.Player = ctx.voice_client
             except:
                 return await ctx.send('No music player is currently running.')
             await player.stop()
@@ -177,7 +189,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         else:
             # See if player is active
             try:
-                player: CustomPlayer = ctx.voice_client
+                player: wavelink.Player = ctx.voice_client
             except:
                 return await ctx.send('No music player is currently running.')
             # Check if paused
@@ -209,7 +221,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         else:
             # See if player is active
             try:
-                player: CustomPlayer = ctx.voice_client
+                player: wavelink.Player = ctx.voice_client
             except:
                 return await ctx.send('No music player is currently running.')
             # Check if paused
@@ -243,7 +255,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             if 1 <= volume <= 100:
                 # See if player is active
                 try:
-                    player: CustomPlayer = ctx.voice_client
+                    player: wavelink.Player = ctx.voice_client
                 except:
                     return await ctx.send('No music player is currently running.')
                 await player.set_volume(volume)
