@@ -1,6 +1,6 @@
 # Imports
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 import wavelink
 from wavelink.ext import spotify  # Spotify not supported, but maybe eventually...
 import datetime
@@ -60,6 +60,30 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
     @commands.Cog.listener()
     async def on_ready(self):
         print(f'Extension loaded: {self.__class__.__name__}')
+        self.checkIfConnectedToVoiceChannel.start()
+        print('Started background task "Check If Connected to Voice Channel"')
+
+    # Task: Check if connected to voice channel
+    @tasks.loop(minutes=5.0)
+    async def checkIfConnectedToVoiceChannel(self):
+        # Loop through every guild to get connected voice clients
+        for guild in self.bot.guilds:
+            voice_client = guild.voice_client
+            if voice_client and voice_client.is_connected():
+                try:
+                    # Check if player is running, and if it is, disconnect if not in use
+                    player: wavelink.Player = voice_client
+                    if not player.is_playing() and not player.is_paused():
+                        await voice_client.disconnect()
+                except Exception as e:
+                    # Disconnect if player isn't running.
+                    print(e)
+                    await voice_client.disconnect()
+
+    # Run Before Task: Check if connected to voice channel
+    @checkIfConnectedToVoiceChannel.before_loop
+    async def before_check_if_connected_to_voice_channel(self):
+        await self.bot.wait_until_ready()
 
     # Listener: On Track End
     @commands.Cog.listener()
