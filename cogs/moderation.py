@@ -11,6 +11,8 @@ from utils.logger import log, logCogLoad
 from utils.bot_utils import sendMessage
 
 
+# TODO: Figure out how to fix spaces issue with blocked words(blocked words/phrases can't have spaces in them,
+#  or else it breaks.
 def loadBlockedWords():
     with open('data/moderation/blocked_words.txt', 'r') as file:
         lines = file.readlines()

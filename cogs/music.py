@@ -6,13 +6,7 @@ from wavelink.ext import spotify  # Spotify not supported, but maybe eventually.
 import datetime
 from utils.logger import logCommand
 
-# TODO: Check for unnecessary redundancy
-
-
-class CustomPlayer(wavelink.Player):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.queue = wavelink.Queue
+# TODO: Add move command, only usable by admins, to move bot from one VC to another
 
 
 # Function written by ChatGPT. I know; shut up.
@@ -32,17 +26,43 @@ def convertDuration(milliseconds):
     return formatted_time
 
 
+async def runChecks(ctx, BotNotInVC=None, UserNotInVCMsg=None, UserInDifferentVCMsg=None):
+    user_vc = ctx.author.voice
+    bot_vc = ctx.voice_client
+
+    if not BotNotInVC:
+        BotNotInVC = 'I am not connected to a voice channel.'
+
+    if not UserNotInVCMsg:
+        UserNotInVCMsg = 'You must be connected to the same channel as me to skip the current song.'
+
+    if not UserInDifferentVCMsg:
+        UserInDifferentVCMsg = 'You must be in the same channel as me to perform this action.'
+
+    # Bot not connected to VC
+    if not bot_vc:
+        return await ctx.send(BotNotInVC)
+
+    # User not connected to VC
+    if not user_vc:
+        return await ctx.send(UserNotInVCMsg)
+
+    # User in different VC
+    if user_vc.channel != bot_vc.channel:
+        return await ctx.send(UserInDifferentVCMsg)
+
+
 class Music(commands.Cog, description="Commands relating to the voice chat music player."):
     def __init__(self, bot):
         self.bot = bot
 
+    # Listener: On Track End
     @commands.Cog.listener()
     async def on_wavelink_track_end(self, payload: wavelink.TrackEventPayload):
         player: wavelink.Player = payload.player
         if not player.queue.is_empty:
             next_track = player.queue.get()
             await player.play(next_track)
-
 
     # Command: Play
     @commands.command(help='Play a song in a voice chat. Syntax: "!play <URL or search term>""')
@@ -104,165 +124,101 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
     # Command: Skip
     @commands.command(help='Skips to the next song in queue. Stops the player if there are no songs left.')
     async def skip(self, ctx):
-        # There's probably a more efficient way of combining the checks of the pause/resume commands, but
-        # I'll worry about it later.
-        user_vc = ctx.author.voice
-        bot_vc = ctx.voice_client
+        # Run checks (is user in vc, is user in same vc as bot, etc.)
+        await runChecks(ctx)
+        # Check if player is running
+        try:
+            player: wavelink.Player = ctx.voice_client
+        except:
+            return await ctx.send('No music player is currently running.')
 
-        # Bot not connected to VC
-        if not bot_vc:
-            return await ctx.send('I am not connected to a voice channel.')
-
-        # User not connected to VC
-        if not user_vc:
-            return await ctx.send('You are not connected to a voice channel.')
-
-        # User in different VC
-        if user_vc.channel != bot_vc.channel:
-            return await ctx.send('You must be in the same channel as me to stop the player.')
-
-        # Skip
-        else:
-            try:
-                # TODO: Do the following to all other commands (bot_vc)
-                player: wavelink.Player = bot_vc
-            except:
-                return await ctx.send('No music player is currently running.')
-            # Stop playback is queue is empty
-            if player.queue.is_empty:
-                await player.stop()
-                logCommand(ctx.author, 'skip')
-                return await ctx.send('Playback was stopped because there\'s no remaining songs in the queue.')
-            # Skip current song in queue
-            await player.seek(player.current.duration * 1000)
-            if player.is_paused():
-                await player.resume()
+        # Stop playback if queue is empty
+        if player.queue.is_empty:
+            await player.stop()
+            # Log the command
+            logCommand(ctx.author, 'skip')
+            return await ctx.send('Playback was stopped because there\'s no remaining songs in the queue.')
+        # Skip current song in queue
+        await player.seek(player.current.duration * 1000)
+        if player.is_paused():
+            await player.resume()
+        logCommand(ctx.author, 'skip')
 
     # Command: Stop
-    @commands.command(help='Stops the music player, if running.')
+    @commands.command(help='Stops the music player and clears the queue.')
     async def stop(self, ctx):
-        user_vc = ctx.author.voice
-        bot_vc = ctx.voice_client
+        # Run checks
+        await runChecks(ctx)
 
-        # Bot not connected to VC
-        if not bot_vc:
-            return await ctx.send('I am not connected to a voice channel.')
-
-        # User not connected to VC
-        if not user_vc:
-            return await ctx.send('You are not connected to a voice channel.')
-
-        # User in different VC
-        if user_vc.channel != bot_vc.channel:
-            return await ctx.send('You must be in the same channel as me to stop the player.')
-
-        # Stop
-        else:
-            # See if player is active
-            try:
-                player: wavelink.Player = ctx.voice_client
-            except:
-                return await ctx.send('No music player is currently running.')
-            await player.stop()
-            await ctx.send('Stopped music playback.')
-            logCommand(ctx.author, 'stop')
+        # See if player is active
+        try:
+            player: wavelink.Player = ctx.voice_client
+        except:
+            # Don't log the command because it makes no difference
+            return await ctx.send('No music player is currently running.')
+        # Stop playback.
+        await player.stop()
+        player.queue.reset()
+        await ctx.send('Stopped music playback.')
+        logCommand(ctx.author, 'stop')
 
     # Command: Pause
     @commands.command(help='Pauses the player.')
     async def pause(self, ctx):
-        user_vc = ctx.author.voice
-        bot_vc = ctx.voice_client
+        # Run checks
+        await runChecks(ctx)
 
-        # Bot not connected to VC
-        if not bot_vc:
-            return await ctx.send('I am not connected to a voice channel.')
+        # See if player is active
+        try:
+            player: wavelink.Player = ctx.voice_client
+        except:
+            return await ctx.send('No music player is currently running.')
 
-        # User not connected to VC
-        if not user_vc:
-            return await ctx.send('You are not connected to a voice channel.')
-
-        # User in different VC
-        if user_vc.channel != bot_vc.channel:
-            return await ctx.send('You are not in the same voice channel as me.')
-
-        # Resume
-        else:
-            # See if player is active
-            try:
-                player: wavelink.Player = ctx.voice_client
-            except:
-                return await ctx.send('No music player is currently running.')
-            # Check if paused
-            if player.is_paused():
-                return await ctx.send('The player is already paused.')
-            await player.pause()
-            await ctx.send('Playback paused.')
-            logCommand(ctx.author, 'pause')
+        # Check if paused
+        if player.is_paused():
+            # Don't log the command because it makes no difference
+            return await ctx.send('The player is already paused.')
+        # Pause the player
+        await player.pause()
+        await ctx.send('Playback paused.')
+        logCommand(ctx.author, 'pause')
 
     # Command: Resume
     @commands.command(help='Resumes the player, if paused.')
     async def resume(self, ctx):
-        user_vc = ctx.author.voice
-        bot_vc = ctx.voice_client
+        await runChecks(ctx)
+        # See if player is active
+        try:
+            player: wavelink.Player = ctx.voice_client
+        except:
+            return await ctx.send('No music player is currently running.')
+        # Check if paused
+        if not player.is_paused():
+            return await ctx.send('The player is currently not paused.')
+        # Resume the player
+        await player.resume()
+        await ctx.send('Playback resumed.')
+        logCommand(ctx.author, 'resume')
 
-        # Bot not connected to VC
-        if not bot_vc:
-            return await ctx.send('I am not connected to a voice channel.')
+    # Command: Volume
+    @commands.command(help='Adjusts the volume of the music player. Syntax: "!volume <volume>"')
+    async def volume(self, ctx, volume: int):
+        await runChecks(ctx, UserInDifferentVCMsg='You can only adjust the volume of the music if you\'re in the same voice channel as me.')
 
-        # User not connected to VC
-        if not user_vc:
-            return await ctx.send('You are not connected to a voice channel.')
-
-        # User in different VC
-        if user_vc.channel != bot_vc.channel:
-            return await ctx.send('You are not in the same voice channel as me.')
-
-        # Resume
-        else:
+        # Check if volume is in acceptable parameters
+        if 1 <= volume <= 100:
             # See if player is active
             try:
                 player: wavelink.Player = ctx.voice_client
             except:
                 return await ctx.send('No music player is currently running.')
-            # Check if paused
-            if not player.is_paused():
-                return await ctx.send('The player is currently not paused.')
-            await player.resume()
-            await ctx.send('Playback resumed.')
-            logCommand(ctx.author, 'resume')
-
-    # Command: Volume
-    @commands.command(help='Adjusts the volume of the music player. Syntax: "!volume <volume>"')
-    async def volume(self, ctx, volume: int):
-        user_vc = ctx.author.voice
-        bot_vc = ctx.voice_client
-
-        # Bot not connected to VC
-        if not bot_vc:
-            return await ctx.send('I am not connected to a voice channel.')
-
-        # User not connected to VC
-        if not user_vc:
-            return await ctx.send('You are not connected to a voice channel.')
-
-        # User in different VC
-        if user_vc.channel != bot_vc.channel:
-            return await ctx.send('You can only adjust the volume of the music if you\'re in the same voice channel as me.')
-
-        # Resume
+            # Set volume
+            await player.set_volume(volume)
+            await ctx.send(f'Volume of player adjusted to `{volume}`.')
+            logCommand(ctx.author, 'volume')
         else:
-            # Check if volume is in acceptable parameters
-            if 1 <= volume <= 100:
-                # See if player is active
-                try:
-                    player: wavelink.Player = ctx.voice_client
-                except:
-                    return await ctx.send('No music player is currently running.')
-                await player.set_volume(volume)
-                await ctx.send(f'Volume of player adjusted to `{volume}`.')
-                logCommand(ctx.author, 'volume')
-            else:
-                return await ctx.send('Volume must be between one and 100.')
+            # Send error message
+            return await ctx.send('Volume must be between one and 100.')
 
 
 async def setup(bot):

@@ -30,6 +30,36 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
         await ctx.send(embed=info_embed)
         logCommand(ctx.author, 'info', ctx.channel)
 
+    @commands.command(help='Load a cog. (Only usable by bot owner.)')
+    @commands.is_owner()
+    async def load(self, ctx, cog_name: str):
+        try:
+            self.bot.load_extension(cog_name)
+            await ctx.send(f'The cog "{cog_name}" was successfully mounted and started.')
+        except commands.ExtensionError as e:
+            await ctx.send(f'An error occurred while unloading cog "{cog_name}": {e}')
+
+    @commands.command(help='Unload a cog. (Only usable by bot owner.)')
+    @commands.is_owner()
+    async def unload(self, ctx, cog_name: str):
+        # TODO: WORK HERE!!
+        if cog_name == 'Miscellaneous':
+            return await ctx.send('amogus')
+        try:
+            self.bot.unload_extension(cog_name)
+            await ctx.send(f'The cog "{cog_name}" was successfully unloaded.')
+        except commands.ExtensionError as e:
+            await ctx.send(f'An error occurred while unloading cog "{cog_name}": {e}')
+
+    @commands.command(help='Reload a cog. (Only usable by bot owner.)')
+    @commands.is_owner()
+    async def reload(self, ctx, cog_name: str):
+        try:
+            self.bot.reload_extension(cog_name)
+            await ctx.send(f'The cog "{cog_name}" was successfully reloaded.')
+        except commands.ExtensionError as e:
+            await ctx.send(f'An error occurred while unloading cog "{cog_name}": {e}')
+
 
 async def setup(bot):
     await bot.add_cog(Miscellaneous(bot))
