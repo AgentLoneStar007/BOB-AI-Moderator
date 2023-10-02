@@ -143,7 +143,8 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             await player.play(next_track)
 
     # Command: Play
-    @commands.command(help='Play a song in a voice chat. Syntax: "!play <URL or search term>"')
+    @commands.command(help='Play a song in a voice chat. Syntax: "!play <URL or search term>"'
+                           'Currently only YouTube URLs and searches are supported.')
     async def play(self, ctx, *, query: str) -> None:
         user_vc = ctx.author.voice
 
@@ -378,7 +379,36 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
     @commands.command(help='ipsum dolor')
     async def playerinfo(self, ctx):
-        return
+        await runChecks(ctx)
+        # Check if player is running
+        player: wavelink.Player = await checkPlayer(ctx)
+        if not player:
+            return
+
+        # Check if player is running
+        if not player.current:
+            return await ctx.send('No track is currently playing, and the queue is empty.')
+
+        # Create vars
+        video_id = player.current.uri.replace('https://www.youtube.com/watch?v=', '')
+        thumbnail_url = f'https://img.youtube.com/vi/{video_id}/maxresdefault.jpg'
+
+        # Create the info embed
+        embed = discord.Embed(
+            title='Current Player Info',
+            description=f'Information on the currently playing track.',
+            color=discord.Color.from_rgb(1, 162, 186),
+        )
+        embed.add_field(name='Current Track Length:', value=convertDuration(player.current.duration))
+        embed.add_field(name='Current Track Position:', value=convertDuration(player.position))
+        embed.add_field(name='Author:', value=player.current.author)
+        embed.add_field(name='URL:', value=player.current.uri)
+        embed.add_field(name='Current Queue Length:', value=len(player.queue))
+        embed.set_image(url=thumbnail_url)
+        await ctx.send(embed=embed)
+
+        # Log command usage
+        logCommand(ctx.author, 'playerinfo')
 
 
 async def setup(bot):
