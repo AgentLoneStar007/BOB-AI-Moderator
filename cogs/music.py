@@ -4,12 +4,14 @@ from discord.ext import commands, tasks
 import wavelink
 from wavelink.ext import spotify  # Spotify not supported, but maybe eventually...
 import datetime
+import re
 from utils.logger import logCommand
 
 # TODO: Add move command, only usable by admins, to move bot from one VC to another
+# TODO: Add check to voice client listener to see if bot is all alone in VC, even if music is playing
 
 
-# Function written by ChatGPT. I know; shut up.
+# The following three functions were written by ChatGPT. I know; shut up.
 def convertDuration(milliseconds):
     # Convert milliseconds to seconds
     seconds = milliseconds / 1000
@@ -21,9 +23,47 @@ def convertDuration(milliseconds):
     hours, remainder = divmod(duration.total_seconds(), 3600)
     minutes, seconds = divmod(remainder, 60)
 
-    formatted_time = f"{int(hours):02}:{int(minutes):02}:{int(seconds):02}"
+    if int(hours) == 0:
+        formatted_time = f"{int(minutes):02}:{int(seconds):02}"
+    else:
+        formatted_time = f"{int(hours):02}:{int(minutes):02}:{int(seconds):02}"
 
     return formatted_time
+
+
+def checkIfTimeFormatValid(input_str):
+    # Regular expression patterns for HH:MM:SS and MM:SS formats
+    hh_mm_ss_pattern = r'^\d{2}:\d{2}:\d{2}$'
+    mm_ss_pattern = r'^\d{2}:\d{2}$'
+
+    # Check if the input matches either pattern
+    if re.match(hh_mm_ss_pattern, input_str) or re.match(mm_ss_pattern, input_str):
+        return True
+    else:
+        return False
+
+
+def timeToMilliseconds(time_str):
+    # Regular expression pattern for HH:MM:SS and MM:SS formats
+    hh_mm_ss_pattern = r'^(\d{2}):(\d{2}):(\d{2})$'
+    mm_ss_pattern = r'^(\d{2}):(\d{2})$'
+
+    # Check if the input matches either pattern
+    hh_mm_ss_match = re.match(hh_mm_ss_pattern, time_str)
+    mm_ss_match = re.match(mm_ss_pattern, time_str)
+
+    if hh_mm_ss_match:
+        hours, minutes, seconds = map(int, hh_mm_ss_match.groups())
+        total_seconds = hours * 3600 + minutes * 60 + seconds
+    elif mm_ss_match:
+        minutes, seconds = map(int, mm_ss_match.groups())
+        total_seconds = minutes * 60 + seconds
+    else:
+        raise ValueError("Invalid time format. Use HH:MM:SS or MM:SS.")
+
+    # Convert total seconds to milliseconds
+    milliseconds = total_seconds * 1000
+    return milliseconds
 
 
 async def runChecks(ctx, BotNotInVC=None, UserNotInVCMsg=None, UserInDifferentVCMsg=None):
@@ -34,7 +74,7 @@ async def runChecks(ctx, BotNotInVC=None, UserNotInVCMsg=None, UserInDifferentVC
         BotNotInVC = 'I am not connected to a voice channel.'
 
     if not UserNotInVCMsg:
-        UserNotInVCMsg = 'You must be connected to the same channel as me to skip the current song.'
+        UserNotInVCMsg = 'You must be connected to the same channel as me to perform this action.'
 
     if not UserInDifferentVCMsg:
         UserInDifferentVCMsg = 'You must be in the same channel as me to perform this action.'
@@ -52,6 +92,15 @@ async def runChecks(ctx, BotNotInVC=None, UserNotInVCMsg=None, UserInDifferentVC
         return await ctx.send(UserInDifferentVCMsg)
 
 
+async def checkPlayer(ctx):
+    try:
+        player: wavelink.Player = ctx.voice_client
+        return player
+    except:
+        await ctx.send('No music player is currently running.')
+        return None
+
+
 class Music(commands.Cog, description="Commands relating to the voice chat music player."):
     def __init__(self, bot):
         self.bot = bot
@@ -61,7 +110,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
     async def on_ready(self):
         print(f'Extension loaded: {self.__class__.__name__}')
         self.checkIfConnectedToVoiceChannel.start()
-        print('Started background task "Check If Connected to Voice Channel"')
+        print('Started background task "Check If Connected to Voice Channel."')
 
     # Task: Check if connected to voice channel
     @tasks.loop(minutes=5.0)
@@ -113,8 +162,9 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             return await ctx.send(f'I could\'nt find any songs with your query of "`{query}`."')
 
         track: wavelink.YouTubeTrack = tracks[0]
+        # Add track to queue
         if player.is_playing():
-            # More efficient way to go about the embeds, but I'll do it later
+            # There's probably a more efficient way to go about the embeds, but I'll do it later
             player.queue.put(item=track)
 
             # Get time left before song plays
@@ -135,6 +185,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             embed.set_image(url=track.thumb)
             await ctx.send(embed=embed)
 
+        # Play track immediately
         else:
             await player.play(track)
             embed = discord.Embed(
@@ -156,17 +207,16 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         # Run checks (is user in vc, is user in same vc as bot, etc.)
         await runChecks(ctx)
         # Check if player is running
-        try:
-            player: wavelink.Player = ctx.voice_client
-        except:
-            return await ctx.send('No music player is currently running.')
+        player: wavelink.Player = await checkPlayer(ctx)
+        if not player:
+            return
 
         # Stop playback if queue is empty
         if player.queue.is_empty:
             await player.stop()
             # Log the command
             logCommand(ctx.author, 'skip')
-            return await ctx.send('Playback was stopped because there\'s no remaining songs in the queue.')
+            return await ctx.send('Playback was stopped because there are no remaining songs in the queue.')
         # Skip current song in queue
         await player.seek(player.current.duration * 1000)
         if player.is_paused():
@@ -179,12 +229,10 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         # Run checks
         await runChecks(ctx)
 
-        # See if player is active
-        try:
-            player: wavelink.Player = ctx.voice_client
-        except:
-            # Don't log the command because it makes no difference
-            return await ctx.send('No music player is currently running.')
+        # Check if player is running
+        player: wavelink.Player = await checkPlayer(ctx)
+        if not player:
+            return
         # Stop playback.
         await player.stop()
         player.queue.reset()
@@ -197,11 +245,10 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         # Run checks
         await runChecks(ctx)
 
-        # See if player is active
-        try:
-            player: wavelink.Player = ctx.voice_client
-        except:
-            return await ctx.send('No music player is currently running.')
+        # Check if player is running
+        player: wavelink.Player = await checkPlayer(ctx)
+        if not player:
+            return
 
         # Check if paused
         if player.is_paused():
@@ -216,11 +263,11 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
     @commands.command(help='Resumes the player, if paused.')
     async def resume(self, ctx):
         await runChecks(ctx)
-        # See if player is active
-        try:
-            player: wavelink.Player = ctx.voice_client
-        except:
-            return await ctx.send('No music player is currently running.')
+        # Check if player is running
+        player: wavelink.Player = await checkPlayer(ctx)
+        if not player:
+            return
+
         # Check if paused
         if not player.is_paused():
             return await ctx.send('The player is currently not paused.')
@@ -236,11 +283,11 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
         # Check if volume is in acceptable parameters
         if 1 <= volume <= 100:
-            # See if player is active
-            try:
-                player: wavelink.Player = ctx.voice_client
-            except:
-                return await ctx.send('No music player is currently running.')
+            # Check if player is running
+            player: wavelink.Player = await checkPlayer(ctx)
+            if not player:
+                return
+
             # Set volume
             await player.set_volume(volume)
             await ctx.send(f'Volume of player adjusted to `{volume}`.')
@@ -248,6 +295,90 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         else:
             # Send error message
             return await ctx.send('Volume must be between one and 100.')
+
+    @commands.command(help='Rewinds the player by a number of seconds. Default is 10 seconds. '
+                           'Syntax: "!rewind [seconds to rewind]"')
+    async def rewind(self, ctx, rewind_time: int = 10):
+        await runChecks(ctx)
+        # Check if player is running
+        player: wavelink.Player = await checkPlayer(ctx)
+        if not player:
+            return
+
+        rewind_time = rewind_time * 1000
+        # If the rewind time is greater than time left before current position...
+        if rewind_time > int(player.position) or rewind_time < 0:
+            # Restart song playback
+            await player.seek(0)
+            await ctx.send('Restarted playback.')
+            return logCommand(ctx.author, 'rewind')
+        position_to_rewind_to = int(player.position - rewind_time)
+        await player.seek(position_to_rewind_to)
+        await ctx.send(f'Rewound player to position `{convertDuration(position_to_rewind_to)}`.')
+
+    @commands.command(help='Fast-forwards the player by a number of seconds. Default is 10 seconds. '
+                           'Syntax: "!fastforward [seconds to fastforward]"')
+    async def fastforward(self, ctx, fastforward_time: int = 10):
+        await runChecks(ctx)
+        # Check if player is running
+        player: wavelink.Player = await checkPlayer(ctx)
+        if not player:
+            return
+
+        ff_time = fastforward_time * 1000
+        # If the fastforward time is greater than time left in video...
+        if ff_time > int(player.position) or ff_time < 0:
+            # Skip to the next song in queue. Stop playback if queue is empty
+            if player.queue.is_empty:
+                await ctx.send('Stopping playback because there\'s no more songs in the queue.')
+                await player.stop()
+                return logCommand(ctx.author, 'fastforward')
+
+            await player.play(player.queue.get())
+            await ctx.send('Skipping to next song in queue.')
+            return await logCommand(ctx.author, 'fastforward')
+
+        position_to_ff_to = int(player.position + ff_time)
+        await player.seek(position_to_ff_to)
+        await ctx.send(f'Fast-forwarded player to position `{convertDuration(position_to_ff_to)}`.')
+
+    @commands.command(help='Seek a specific position in the currently playing track. Syntax: '
+                           '"!seek <position to move to, in format (HH:)MM:SS. HH optional.>"')
+    async def seek(self, ctx, position: str):
+        await runChecks(ctx)
+        # Check if player is running
+        player: wavelink.Player = await checkPlayer(ctx)
+        if not player:
+            return
+
+        # If the input is in the correct format
+        if checkIfTimeFormatValid(position):
+            # Define vars
+            time_to_seek = timeToMilliseconds(position)
+            current_player_time = player.position
+            current_player_length = player.current.length
+
+            # If the position is not less than zero or greater than the video length
+            if not 0 <= time_to_seek < current_player_length:
+                return await ctx.send('The seek-to position must not be longer than the video, or less than zero.')
+
+            # Seek to the position, and send a corresponding message
+            await player.seek(time_to_seek)
+            if time_to_seek > current_player_time:
+                await ctx.send(f'Fast-forwarded to `{position}` in video.')
+            else:
+                await ctx.send(f'Re-winded video to `{position}`.')
+
+            # Log command usage
+            logCommand(ctx.author, 'seek')
+
+        else:
+            return await ctx.send('Invalid position to seek to. Check command help page with '
+                                  '"!help seek" for more information.')
+
+    @commands.command(help='ipsum dolor')
+    async def playerinfo(self, ctx):
+        return
 
 
 async def setup(bot):
