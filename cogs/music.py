@@ -56,6 +56,11 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
     def __init__(self, bot):
         self.bot = bot
 
+    # Listener: On Ready
+    @commands.Cog.listener()
+    async def on_ready(self):
+        print(f'Extension loaded: {self.__class__.__name__}')
+
     # Listener: On Track End
     @commands.Cog.listener()
     async def on_wavelink_track_end(self, payload: wavelink.TrackEventPayload):
@@ -65,7 +70,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             await player.play(next_track)
 
     # Command: Play
-    @commands.command(help='Play a song in a voice chat. Syntax: "!play <URL or search term>""')
+    @commands.command(help='Play a song in a voice chat. Syntax: "!play <URL or search term>"')
     async def play(self, ctx, *, query: str) -> None:
         user_vc = ctx.author.voice
 

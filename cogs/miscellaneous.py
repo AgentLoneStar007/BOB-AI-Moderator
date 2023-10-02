@@ -9,7 +9,7 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
     def __init__(self, bot):
         self.bot = bot
 
-    # Example listener
+    # Listener: On Ready
     @commands.Cog.listener()
     async def on_ready(self):
         print(f'Extension loaded: {self.__class__.__name__}')
@@ -33,8 +33,9 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
     @commands.command(help='Load a cog. (Only usable by bot owner.)')
     @commands.is_owner()
     async def load(self, ctx, cog_name: str):
+        cog_name = cog_name.lower()
         try:
-            self.bot.load_extension(cog_name)
+            self.bot.load_extension(f'cogs.{cog_name}')
             await ctx.send(f'The cog "{cog_name}" was successfully mounted and started.')
         except commands.ExtensionError as e:
             await ctx.send(f'An error occurred while unloading cog "{cog_name}": {e}')
@@ -42,11 +43,12 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
     @commands.command(help='Unload a cog. (Only usable by bot owner.)')
     @commands.is_owner()
     async def unload(self, ctx, cog_name: str):
-        # TODO: WORK HERE!!
-        if cog_name == 'Miscellaneous':
-            return await ctx.send('amogus')
+        cog_name = cog_name.lower()
+        if cog_name == 'miscellaneous':
+            return await ctx.send('Cannot unload cog Miscellaneous, as because it contains cog loading utility '
+                                  'commands. Restart the bot to apply changes to cog Miscellaneous.')
         try:
-            self.bot.unload_extension(cog_name)
+            self.bot.unload_extension(f'cogs.{cog_name}')
             await ctx.send(f'The cog "{cog_name}" was successfully unloaded.')
         except commands.ExtensionError as e:
             await ctx.send(f'An error occurred while unloading cog "{cog_name}": {e}')
@@ -54,8 +56,9 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
     @commands.command(help='Reload a cog. (Only usable by bot owner.)')
     @commands.is_owner()
     async def reload(self, ctx, cog_name: str):
+        cog_name = cog_name.lower()
         try:
-            self.bot.reload_extension(cog_name)
+            await self.bot.reload_extension(f'cogs.{cog_name}')
             await ctx.send(f'The cog "{cog_name}" was successfully reloaded.')
         except commands.ExtensionError as e:
             await ctx.send(f'An error occurred while unloading cog "{cog_name}": {e}')
