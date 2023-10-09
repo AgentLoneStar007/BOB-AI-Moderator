@@ -16,6 +16,7 @@ from utils.bot_utils import errorOccurred
 # Vars
 load_dotenv()
 BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
+OWNER_ID = int(os.getenv("BOT_OWNER_ID"))
 custom_status = 'Use "!help" for help.'
 
 
@@ -28,7 +29,7 @@ class Bot(commands.Bot):
         intents.message_content = True
 
         super().__init__(
-            command_prefix='!', owner_id=403735483961704450, intents=defIntents(), help_command=PrettyHelp(
+            command_prefix='!', owner_id=OWNER_ID, intents=defIntents(), help_command=PrettyHelp(
             color=discord.Color.from_rgb(1, 162, 186),
             index_title='B.O.B Help Menu',
             no_category='Miscellaneous Commands',

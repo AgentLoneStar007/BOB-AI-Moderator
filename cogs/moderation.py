@@ -11,12 +11,12 @@ from utils.logger import log, logCogLoad
 from utils.bot_utils import sendMessage
 
 
-# TODO: Figure out how to fix spaces issue with blocked words(blocked words/phrases can't have spaces in them,
-#  or else it breaks.
+# TODO: (RE-ENABLE BANNING IN TEMPBAN COMMAND!!)
 def loadBlockedWords():
     with open('data/moderation/blocked_words.txt', 'r') as file:
         lines = file.readlines()
-        blocked_words = [line.strip() for line in lines]
+        # ha ha spaghetti code go brrrr
+        blocked_words = [line.strip().replace(' ', '').lower() for line in lines]
         file.close()
     return blocked_words
 
@@ -139,6 +139,32 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
             if user_id in user_message_counts_3:
                 user_message_counts_3[user_id] -= 1
 
+    # Listener: On Member Update
+    @commands.Cog.listener()
+    async def on_member_update(self, before, after):
+        # Ignore updates from bots
+        if before.bot:
+            return
+
+        print('amogus')
+
+        # Check user status to see if it's changed
+        if before.status != after.status:
+            user_status = str(after.status)
+            for blocked_word in self.blocked_words:
+                if re.search(rf'\b{re.escape(blocked_word)}\b', user_status):
+                    # Notify moderators of the rule-breaking status
+                    dm_channel = await after.create_dm()
+                    await dm_channel.send(f'{after.author.mention}, your status contains a rule-breaking word or phrase.'
+                                          ' If this is in error, please reach out to a moderator. '
+                                          'If you do not update your status, you will be kicked from the server.')
+                    await sendMessage(self.bot, self.bot_output_channel, f'User {after.author.mention} has a '
+                                                                         'status containing a blocked word or phrase.')
+                    log('info', f'User {after.author} has a status containing a blocked word or phrase.')
+
+                    # Stop checking for blocked words after the first word is found
+                    return
+
     # Task: Check for users needing to be unbanned
     @tasks.loop(minutes=5.0)
     async def checkForNeededUnbans(self):
@@ -243,12 +269,10 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
 
         # Ban the user
         # await member.ban(reason=reason)
-        # TODO: (RE-ENABLE BANNING IN TEMPBAN COMMAND!!)
 
-        # Now log the temp ban in the #bot-output channel, and to file
-        message = f'{member.mention}(ID: {member.id}) has been temporarily banned till {unban_time}. Reason: "{reason}".'
-        await sendMessage(self.bot, self.bot_output_channel, message)
-        log('info', message)
+        # Now log the temp ban in the #bot-output channel, and to file (probably more optimizing could be done here)
+        await sendMessage(self.bot, self.bot_output_channel, f'{member.mention}(ID: {member.id}) has been temporarily banned till {unban_time} UTC. Reason: "{reason}".')
+        log('info', f'{member.name}(ID: {member.id}) has been temporarily banned till {unban_time} UTC. Reason: "{reason}".')
 
     @commands.command(help='Unbans a user. Syntax: "!unban <user ID>"')
     @commands.has_permissions(ban_members=True)

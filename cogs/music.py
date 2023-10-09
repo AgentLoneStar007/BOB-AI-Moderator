@@ -5,7 +5,7 @@ import wavelink
 from wavelink.ext import spotify  # Spotify not supported, but maybe eventually...
 import datetime
 import re
-from utils.logger import logCommand
+from utils.logger import logCommand, log
 
 # TODO: Add move command, only usable by admins, to move bot from one VC to another
 # TODO: Add check to voice client listener to see if bot is all alone in VC, even if music is playing
@@ -115,19 +115,36 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
     # Task: Check if connected to voice channel
     @tasks.loop(minutes=5.0)
     async def checkIfConnectedToVoiceChannel(self):
+        # Probably a better way to go about the disconnect system
+
+        # Vars
+        should_leave = False
+
         # Loop through every guild to get connected voice clients
         for guild in self.bot.guilds:
             voice_client = guild.voice_client
+            # If voice client is connected
             if voice_client and voice_client.is_connected():
+                # If the bot is the only one present, disconnect
+                if len(voice_client.channel.members) == 1:
+                    should_leave = True
                 try:
-                    # Check if player is running, and if it is, disconnect if not in use
+                    # Check if player is running, and if it is, disconnect if not in use and clear the queue
                     player: wavelink.Player = voice_client
                     if not player.is_playing() and not player.is_paused():
-                        await voice_client.disconnect()
-                except Exception as e:
-                    # Disconnect if player isn't running.
-                    print(e)
+                        player.queue.reset()
+                        should_leave = True
+                except:
+                    # Disconnect if player isn't running
+                    should_leave = True
+                if should_leave:
+                    # Disconnect, and log it to file and console
                     await voice_client.disconnect()
+                    # Making a var of this for optimization
+                    message = f'Leaving {voice_client.channel} due to inactivity.'
+                    print(message)
+                    return log('info', message)
+        return
 
     # Run Before Task: Check if connected to voice channel
     @checkIfConnectedToVoiceChannel.before_loop
@@ -158,6 +175,8 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             if player.is_playing() and user_vc.channel != ctx.voice_client.channel:
                 return await ctx.send('I am already playing music in another channel.')
 
+        #test_playlist: wavelink.YouTubePlaylist = wavelink.YouTubePlaylist(query)
+        #print(test_playlist)
         tracks: list[wavelink.YouTubeTrack] = await wavelink.YouTubeTrack.search(query)
         if not tracks:
             return await ctx.send(f'I could\'nt find any songs with your query of "`{query}`."')
@@ -178,7 +197,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
                 title=track.title,
                 url=track.uri,
                 description=f'Song added to queue for channel {player.channel}.',
-                color=discord.Color.from_rgb(1, 162, 186),
+                color=discord.Color.from_rgb(1, 162, 186)
             )
             embed.add_field(name='Length:', value=convertDuration(track.duration))
             embed.add_field(name='Author:', value=track.author)
