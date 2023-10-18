@@ -48,7 +48,8 @@ def logsInit():
 
     with open('logs/current.txt', 'w') as file:
         file.write(logFile)
-        file.close()
+
+    return
 
 
 def log(infoType, message):

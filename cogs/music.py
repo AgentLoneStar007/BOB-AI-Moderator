@@ -102,7 +102,7 @@ async def checkPlayer(ctx):
 
 
 class Music(commands.Cog, description="Commands relating to the voice chat music player."):
-    def __init__(self, bot):
+    def __init__(self, bot) -> None:
         self.bot = bot
 
     # Listener: On Ready
@@ -114,7 +114,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
     # Task: Check if connected to voice channel
     @tasks.loop(minutes=5.0)
-    async def checkIfConnectedToVoiceChannel(self):
+    async def checkIfConnectedToVoiceChannel(self) -> None:
         # Probably a better way to go about the disconnect system
 
         # Vars
@@ -138,22 +138,24 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
                     # Disconnect if player isn't running
                     should_leave = True
                 if should_leave:
+                    message = f'Leaving {voice_client.channel} due to inactivity.'
                     # Disconnect, and log it to file and console
+                    print(message)
+                    log('info', message)
                     await voice_client.disconnect()
                     # Making a var of this for optimization
-                    message = f'Leaving {voice_client.channel} due to inactivity.'
-                    print(message)
-                    return log('info', message)
-        return
+                    return None
+
+        return None
 
     # Run Before Task: Check if connected to voice channel
     @checkIfConnectedToVoiceChannel.before_loop
-    async def before_check_if_connected_to_voice_channel(self):
+    async def before_check_if_connected_to_voice_channel(self) -> None:
         await self.bot.wait_until_ready()
 
     # Listener: On Track End
     @commands.Cog.listener()
-    async def on_wavelink_track_end(self, payload: wavelink.TrackEventPayload):
+    async def on_wavelink_track_end(self, payload: wavelink.TrackEventPayload) -> None:
         player: wavelink.Player = payload.player
         if not player.queue.is_empty:
             next_track = player.queue.get()
@@ -223,7 +225,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
     # Command: Skip
     @commands.command(help='Skips to the next song in queue. Stops the player if there are no songs left.')
-    async def skip(self, ctx):
+    async def skip(self, ctx) -> None:
         # Run checks (is user in vc, is user in same vc as bot, etc.)
         await runChecks(ctx)
         # Check if player is running
@@ -241,6 +243,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         await player.seek(player.current.duration * 1000)
         if player.is_paused():
             await player.resume()
+        await ctx.send(f'Skipped track **{player.current.title}**.')
         logCommand(ctx.author, 'skip')
 
     # Command: Stop
@@ -298,7 +301,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
     # Command: Volume
     @commands.command(help='Adjusts the volume of the music player. Syntax: "!volume <volume>"')
-    async def volume(self, ctx, volume: int):
+    async def volume(self, ctx, volume: int) -> None:
         await runChecks(ctx, UserInDifferentVCMsg='You can only adjust the volume of the music if you\'re in the same voice channel as me.')
 
         # Check if volume is in acceptable parameters
@@ -318,7 +321,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
     @commands.command(help='Rewinds the player by a number of seconds. Default is 10 seconds. '
                            'Syntax: "!rewind [seconds to rewind]"')
-    async def rewind(self, ctx, rewind_time: int = 10):
+    async def rewind(self, ctx, rewind_time: int = 10) -> None:
         await runChecks(ctx)
         # Check if player is running
         player: wavelink.Player = await checkPlayer(ctx)
@@ -338,7 +341,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
     @commands.command(help='Fast-forwards the player by a number of seconds. Default is 10 seconds. '
                            'Syntax: "!fastforward [seconds to fastforward]"')
-    async def fastforward(self, ctx, fastforward_time: int = 10):
+    async def fastforward(self, ctx, fastforward_time: int = 10) -> None:
         await runChecks(ctx)
         # Check if player is running
         player: wavelink.Player = await checkPlayer(ctx)
@@ -364,7 +367,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
     @commands.command(help='Seek a specific position in the currently playing track. Syntax: '
                            '"!seek <position to move to, in format (HH:)MM:SS. HH optional.>"')
-    async def seek(self, ctx, position: str):
+    async def seek(self, ctx, position: str) -> None:
         await runChecks(ctx)
         # Check if player is running
         player: wavelink.Player = await checkPlayer(ctx)
@@ -397,7 +400,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
                                   '"!help seek" for more information.')
 
     @commands.command(help='ipsum dolor')
-    async def playerinfo(self, ctx):
+    async def playerinfo(self, ctx) -> None:
         await runChecks(ctx)
         # Check if player is running
         player: wavelink.Player = await checkPlayer(ctx)
@@ -423,6 +426,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         embed.add_field(name='Author:', value=player.current.author)
         embed.add_field(name='URL:', value=player.current.uri)
         embed.add_field(name='Current Queue Length:', value=len(player.queue))
+        embed.add_field(name='Volume', value=player.volume)
         embed.set_image(url=thumbnail_url)
         await ctx.send(embed=embed)
 

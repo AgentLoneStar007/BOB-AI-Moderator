@@ -20,6 +20,7 @@ it to make this bot your own.
   - [x] Basic Music Player
   - [x] Queues
   - [x] YouTube Support
+  - [ ] YouTube Playlist Support
   - [ ] Spotify Support
+  - [ ] Spotify Playlist Support (if that's a thing)
 - [ ] Voice-Activated Commands
-  - [ ] Coming Soon 

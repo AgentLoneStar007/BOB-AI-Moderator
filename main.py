@@ -1,6 +1,7 @@
 # Imports
 # from bot.core import bot, botSetup
 import discord
+from discord import app_commands
 from discord.ext import commands
 from pretty_help import PrettyHelp
 import wavelink
