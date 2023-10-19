@@ -25,7 +25,6 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
         print(f'Extension loaded: {self.__class__.__name__}')
 
     # Command: Info
-    # @commands.command(help="Provide a list of information regarding B.O.B.")
     @app_commands.command(name='info', description='Provide a list of information regarding B.O.B.')
     async def info(self, interaction: discord.Interaction):
         creation_date = self.bot.user.created_at.strftime("%A, %B %d, %Y")
@@ -39,11 +38,9 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
         info_embed.add_field(name='Made In:', value='Python')
         info_embed.add_field(name='Using:', value='[Discord.py](https://github.com/Rapptz/discord.py)')
 
-        # await ctx.send(embed=info_embed)
         await interaction.response.send_message(embed=info_embed, ephemeral=True)
         logCommand(interaction.user, 'info', interaction.channel)
 
-    # @commands.command(help='Load a cog. (Only usable by bot owner.)')
     @app_commands.command(name='load', description='Load a cog. (Only usable by bot owner.)')
     async def load(self, interaction: discord.Interaction, cog_name: str):
         # Format the cog name
@@ -56,18 +53,15 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
         # Try to load the cog
         try:
             await self.bot.load_extension(f'cogs.{cog_name}')
-            # await ctx.send(f'The cog "{cog_name}" was successfully mounted and started.')
             await interaction.response.send_message(
                 f'The cog "{cog_name}" was successfully mounted and started.', ephemeral=True)
             log('info', f'Loaded the cog "{cog_name}" successfully.')
         # Throw an error if failed
         except commands.ExtensionError as e:
-            # await ctx.send(f'An error occurred while unloading cog "{cog_name}": {e}')
             await interaction.response.send_message(
                 f'An error occurred while unloading cog "{cog_name}": {e}', ephemeral=True)
             log('err', f'Failed to load cog "{cog_name}" with the following error: {e}')
 
-    # @commands.command(help='Unload a cog. (Only usable by bot owner.)')
     @app_commands.command(name='unload', description='Unload a cog. (Only usable by bot owner.)')
     async def unload(self, interaction: discord.Interaction, cog_name: str):
         cog_name = cog_name.lower()
@@ -76,23 +70,20 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
         if not await self.checkIfOwner(interaction):
             return
 
-        # Prevent unloading of miscellaneous cog
+        # Prevent unloading of miscellaneous cog (with stupid formatting because PyCharm yells at me)
         if cog_name == 'miscellaneous':
             return await interaction.response.send_message('Cannot unload cog Miscellaneous, as because it contains cog'
                                                            ' loading utility commands. Restart the bot to apply changes'
                                                            ' to cog Miscellaneous.', ephemeral=True)
 
-            # return await ctx.send('Cannot unload cog Miscellaneous, as because it contains cog loading utility '
-            #                      'commands. Restart the bot to apply changes to cog Miscellaneous.')
+        # Try to unload cog
         try:
             await self.bot.unload_extension(f'cogs.{cog_name}')
             return await interaction.response.send_message(f'The cog "{cog_name}" was successfully unloaded.', ephemeral=True)
-            #await ctx.send(f'The cog "{cog_name}" was successfully unloaded.')
+        # Handle any errors that may occur
         except commands.ExtensionError as e:
             return await interaction.response.send_message(f'An error occurred while unloading cog "{cog_name}": {e}')
-            #await ctx.send(f'An error occurred while unloading cog "{cog_name}": {e}')
 
-    #@commands.command(help='Reload a cog. (Only usable by bot owner.)')
     @app_commands.command(name='reload', description='Reload a cog. (Only usable by bot owner.)')
     async def reload(self, interaction: discord.Interaction, cog_name: str):
         cog_name = cog_name.lower()
@@ -106,12 +97,10 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
             await self.bot.reload_extension(f'cogs.{cog_name}')
             return await interaction.response.send_message(f'The cog "{cog_name.title()}" was successfully reloaded.',
                                                            ephemeral=True)
-            #await ctx.send(f'The cog "{cog_name.title()}" was successfully reloaded.')
         # Handle unload errors
         except commands.ExtensionError as e:
             return await interaction.response.send_message(f'An error occurred while reloading cog "{cog_name}": {e}',
                                                            ephemeral=True)
-            #await ctx.send(f'An error occurred while unloading cog "{cog_name}": {e}')
 
     @app_commands.command(name='synccommands', description='Sync all app commands with Discord. (Only usable by bot owner.)')
     async def synccommands(self, interaction: discord.Interaction):

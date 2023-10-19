@@ -12,6 +12,7 @@ from utils.bot_utils import sendMessage
 
 
 # TODO: (RE-ENABLE BANNING IN TEMPBAN COMMAND!!)
+# TODO: Migrate commands to Discord app commands
 def loadBlockedWords():
     with open('data/moderation/blocked_words.txt', 'r') as file:
         lines = file.readlines()

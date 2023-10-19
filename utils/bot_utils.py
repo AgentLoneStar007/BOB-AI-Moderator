@@ -23,5 +23,5 @@ async def sendMessage(bot, channel_id: str, message: str):
 
 async def errorOccurred(ctx, error):
     print(f'The following error occurred when trying to run a command: "{error}"')
-    await ctx.send(f'The following error occurred when trying to run that command: "`{error}`"')
+    await ctx.send(f'The following error occurred when trying to run that command: "`{error}`"',)
 

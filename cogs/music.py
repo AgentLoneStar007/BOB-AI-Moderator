@@ -1,5 +1,6 @@
 # Imports
 import discord
+from discord import app_commands
 from discord.ext import commands, tasks
 import wavelink
 from wavelink.ext import spotify  # Spotify not supported, but maybe eventually...
@@ -8,7 +9,7 @@ import re
 from utils.logger import logCommand, log
 
 # TODO: Add move command, only usable by admins, to move bot from one VC to another
-# TODO: Add check to voice client listener to see if bot is all alone in VC, even if music is playing
+# TODO: Improve migration to Discord app commands with autocompletion and such
 
 
 # The following three functions were written by ChatGPT. I know; shut up.
@@ -66,9 +67,11 @@ def timeToMilliseconds(time_str):
     return milliseconds
 
 
-async def runChecks(ctx, BotNotInVC=None, UserNotInVCMsg=None, UserInDifferentVCMsg=None):
-    user_vc = ctx.author.voice
-    bot_vc = ctx.voice_client
+async def runChecks(interaction: discord.Interaction, BotNotInVC=None, UserNotInVCMsg=None, UserInDifferentVCMsg=None) -> bool:
+    #user_vc = ctx.author.voice
+    user_vc = interaction.user.voice
+    #bot_vc = ctx.voice_client
+    bot_vc = interaction.guild.voice_client
 
     if not BotNotInVC:
         BotNotInVC = 'I am not connected to a voice channel.'
@@ -81,23 +84,28 @@ async def runChecks(ctx, BotNotInVC=None, UserNotInVCMsg=None, UserInDifferentVC
 
     # Bot not connected to VC
     if not bot_vc:
-        return await ctx.send(BotNotInVC)
+        await interaction.response.send_message(BotNotInVC, ephemeral=True)
+        return False
 
     # User not connected to VC
     if not user_vc:
-        return await ctx.send(UserNotInVCMsg)
+        await interaction.response.send_message(UserNotInVCMsg, ephemeral=True)
+        return False
 
     # User in different VC
     if user_vc.channel != bot_vc.channel:
-        return await ctx.send(UserInDifferentVCMsg)
+        await interaction.response.send_message(UserInDifferentVCMsg, ephemeral=True)
+        return False
+
+    return True
 
 
-async def checkPlayer(ctx):
+async def checkPlayer(interaction: discord.Interaction):
     try:
-        player: wavelink.Player = ctx.voice_client
+        player: wavelink.Player = interaction.guild.voice_client
         return player
     except:
-        await ctx.send('No music player is currently running.')
+        await interaction.response.send_message('No music player is currently running.', ephemeral=True)
         return None
 
 
@@ -138,12 +146,13 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
                     # Disconnect if player isn't running
                     should_leave = True
                 if should_leave:
+                    # Making a var of this for optimization
                     message = f'Leaving {voice_client.channel} due to inactivity.'
-                    # Disconnect, and log it to file and console
+                    # Log message and print to console
                     print(message)
                     log('info', message)
+                    # Disconnect from VC
                     await voice_client.disconnect()
-                    # Making a var of this for optimization
                     return None
 
         return None
@@ -152,6 +161,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
     @checkIfConnectedToVoiceChannel.before_loop
     async def before_check_if_connected_to_voice_channel(self) -> None:
         await self.bot.wait_until_ready()
+        return None
 
     # Listener: On Track End
     @commands.Cog.listener()
@@ -162,26 +172,27 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             await player.play(next_track)
 
     # Command: Play
-    @commands.command(help='Play a song in a voice chat. Syntax: "!play <URL or search term>"'
-                           'Currently only YouTube URLs and searches are supported.')
-    async def play(self, ctx, *, query: str) -> None:
-        user_vc = ctx.author.voice
+    @app_commands.command(name='play', description='Play a YouTube video in a voice chat. Syntax: "/play <URL or search term>"')
+    async def play(self, interaction: discord.Interaction, *, query: str) -> None:
+        # Get user VC
+        user_vc = interaction.user.voice
 
+        # Check if user is in VC
         if not user_vc:
-            return await ctx.send('You are not connected to a voice channel.')
+            return await interaction.response.send_message('You are not connected to a voice channel.', ephemeral=True)
 
-        if not ctx.voice_client:
-            player: wavelink.Player = await ctx.author.voice.channel.connect(cls=wavelink.Player)
+        # Check if player is already running. If not, create a new player
+        if not interaction.client.voice_clients:
+            player: wavelink.Player = await interaction.user.voice.channel.connect(cls=wavelink.Player)
         else:
-            player: wavelink.Player = ctx.voice_client
-            if player.is_playing() and user_vc.channel != ctx.voice_client.channel:
-                return await ctx.send('I am already playing music in another channel.')
+            # If player is running, check if bot is in a different VC than user with music playing
+            player: wavelink.Player = interaction.guild.voice_client
+            if player.is_playing() and user_vc.channel != interaction.guild.voice_client.channel:
+                await interaction.response.send_message('I am already playing music in another channel.', ephemeral=True)
 
-        #test_playlist: wavelink.YouTubePlaylist = wavelink.YouTubePlaylist(query)
-        #print(test_playlist)
         tracks: list[wavelink.YouTubeTrack] = await wavelink.YouTubeTrack.search(query)
         if not tracks:
-            return await ctx.send(f'I could\'nt find any songs with your query of "`{query}`."')
+            return await interaction.response.send_message(f'I could\'nt find any songs with your query of "`{query}`."', ephemeral=True)
 
         track: wavelink.YouTubeTrack = tracks[0]
         # Add track to queue
@@ -205,10 +216,14 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             embed.add_field(name='Author:', value=track.author)
             embed.add_field(name='Time Before Track Plays:', value=convertDuration(time_left))
             embed.set_image(url=track.thumb)
-            await ctx.send(embed=embed)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
 
         # Play track immediately
         else:
+            # Check if player is not playing music, and user is in different VC
+            #if not player.is_playing() and user_vc.channel != interaction.guild.voice_client.channel:
+            #    interaction.
+
             await player.play(track)
             embed = discord.Embed(
                 title=track.title,
@@ -219,17 +234,18 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             embed.add_field(name='Length:', value=convertDuration(track.duration))
             embed.add_field(name='Author:', value=track.author)
             embed.set_image(url=track.thumb)
-            await ctx.send(embed=embed)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
 
-        logCommand(ctx.author, 'play')
+        logCommand(interaction.user, 'play')
 
     # Command: Skip
-    @commands.command(help='Skips to the next song in queue. Stops the player if there are no songs left.')
-    async def skip(self, ctx) -> None:
+    @app_commands.command(name='skip', description='Skips to the next song in queue. Stops the player if there are no songs left.')
+    async def skip(self, interaction: discord.Interaction) -> None:
         # Run checks (is user in vc, is user in same vc as bot, etc.)
-        await runChecks(ctx)
+        if not await runChecks(interaction):
+            return
         # Check if player is running
-        player: wavelink.Player = await checkPlayer(ctx)
+        player: wavelink.Player = await checkPlayer(interaction)
         if not player:
             return
 
@@ -237,94 +253,117 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         if player.queue.is_empty:
             await player.stop()
             # Log the command
-            logCommand(ctx.author, 'skip')
-            return await ctx.send('Playback was stopped because there are no remaining songs in the queue.')
+            logCommand(interaction.user, 'skip')
+            await interaction.response.send_message('Playback was stopped because there are no remaining songs in the queue.', ephemeral=True)
+            return
+
         # Skip current song in queue
         await player.seek(player.current.duration * 1000)
         if player.is_paused():
             await player.resume()
-        await ctx.send(f'Skipped track **{player.current.title}**.')
-        logCommand(ctx.author, 'skip')
+        await interaction.response.send_message(f'Skipped track **{player.current.title}**.', ephemeral=True)
+        logCommand(interaction.user, 'skip')
+        return
 
     # Command: Stop
-    @commands.command(help='Stops the music player and clears the queue.')
-    async def stop(self, ctx):
+    #@commands.command(help='Stops the music player and clears the queue.')
+    @app_commands.command(name='stop', description='Stops the music player and clears the queue.')
+    async def stop(self, interaction: discord.Interaction) -> None:
         # Run checks
-        await runChecks(ctx)
+        if not await runChecks(interaction):
+            return
 
         # Check if player is running
-        player: wavelink.Player = await checkPlayer(ctx)
+        player: wavelink.Player = await checkPlayer(interaction)
         if not player:
             return
         # Stop playback.
         await player.stop()
         player.queue.reset()
-        await ctx.send('Stopped music playback.')
-        logCommand(ctx.author, 'stop')
+        await interaction.response.send_message('Stopped music playback.', ephemeral=True)
+        logCommand(interaction.user, 'stop')
+        return
 
     # Command: Pause
-    @commands.command(help='Pauses the player.')
-    async def pause(self, ctx):
+    #@commands.command(help='Pauses the player.')
+    @app_commands.command(name='pause', description='Pauses the player.')
+    async def pause(self, interaction: discord.Interaction) -> None:
         # Run checks
-        await runChecks(ctx)
+        if not await runChecks(interaction):
+            return
 
         # Check if player is running
-        player: wavelink.Player = await checkPlayer(ctx)
+        player: wavelink.Player = await checkPlayer(interaction)
         if not player:
             return
 
         # Check if paused
         if player.is_paused():
             # Don't log the command because it makes no difference
-            return await ctx.send('The player is already paused.')
+            await interaction.response.send_message('The player is already paused.', ephemeral=True)
+            return
         # Pause the player
         await player.pause()
-        await ctx.send('Playback paused.')
-        logCommand(ctx.author, 'pause')
+        await interaction.response.send_message('Playback paused.', ephemeral=True)
+        logCommand(interaction.user, 'pause')
 
     # Command: Resume
-    @commands.command(help='Resumes the player, if paused.')
-    async def resume(self, ctx):
-        await runChecks(ctx)
+    #@commands.command(help='Resumes the player, if paused.')
+    @app_commands.command(name='resume', description='Resumes the player, if paused.')
+    async def resume(self, interaction: discord.Interaction) -> None:
+        # Run checks
+        if not await runChecks(interaction):
+            return
+
         # Check if player is running
-        player: wavelink.Player = await checkPlayer(ctx)
+        player: wavelink.Player = await checkPlayer(interaction)
         if not player:
             return
 
         # Check if paused
         if not player.is_paused():
-            return await ctx.send('The player is currently not paused.')
+            await interaction.response.send_message('The player is currently not paused.', ephemeral=True)
+            return
         # Resume the player
         await player.resume()
-        await ctx.send('Playback resumed.')
-        logCommand(ctx.author, 'resume')
+        await interaction.response.send_message('Playback resumed.', ephemeral=True)
+        logCommand(interaction.user, 'resume')
+        return
 
     # Command: Volume
-    @commands.command(help='Adjusts the volume of the music player. Syntax: "!volume <volume>"')
-    async def volume(self, ctx, volume: int) -> None:
-        await runChecks(ctx, UserInDifferentVCMsg='You can only adjust the volume of the music if you\'re in the same voice channel as me.')
+    #@commands.command(help='Adjusts the volume of the music player. Syntax: "!volume <volume>"')
+    @app_commands.command(name='volume', description='Adjusts the volume of the music player. Syntax: "/volume <volume>"')
+    async def volume(self, interaction: discord.Interaction, volume: int) -> None:
+        # Run checks
+        if not await runChecks(interaction, UserInDifferentVCMsg='You can only adjust the volume of the music if you\'re in the same voice channel as me.'):
+            return
 
         # Check if volume is in acceptable parameters
         if 1 <= volume <= 100:
             # Check if player is running
-            player: wavelink.Player = await checkPlayer(ctx)
+            player: wavelink.Player = await checkPlayer(interaction)
             if not player:
                 return
 
             # Set volume
             await player.set_volume(volume)
-            await ctx.send(f'Volume of player adjusted to `{volume}`.')
-            logCommand(ctx.author, 'volume')
+            await interaction.response.send_message(f'Volume of player adjusted to `{volume}`.', ephemeral=True)
+            logCommand(interaction.user, 'volume')
+            return
         else:
             # Send error message
-            return await ctx.send('Volume must be between one and 100.')
+            await interaction.response.send_message('Volume must be between one and 100.', ephemeral=True)
+            return
 
-    @commands.command(help='Rewinds the player by a number of seconds. Default is 10 seconds. '
-                           'Syntax: "!rewind [seconds to rewind]"')
-    async def rewind(self, ctx, rewind_time: int = 10) -> None:
-        await runChecks(ctx)
+    #@commands.command(help='Rewinds the player by a number of seconds. Syntax: "/rewind [seconds to rewind]"')
+    @app_commands.command(name='rewind', description='Rewinds the player by a number of seconds. Syntax: "/rewind [seconds to rewind]"')
+    async def rewind(self, interaction: discord.Interaction, rewind_time: int = 10) -> None:
+        # Run checks
+        if not await runChecks(interaction):
+            return
+
         # Check if player is running
-        player: wavelink.Player = await checkPlayer(ctx)
+        player: wavelink.Player = await checkPlayer(interaction)
         if not player:
             return
 
@@ -333,18 +372,20 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         if rewind_time > int(player.position) or rewind_time < 0:
             # Restart song playback
             await player.seek(0)
-            await ctx.send('Restarted playback.')
-            return logCommand(ctx.author, 'rewind')
+            await interaction.response.send_message('Restarted playback.', ephemeral=True)
+            logCommand(interaction.user, 'rewind')
+            return
         position_to_rewind_to = int(player.position - rewind_time)
         await player.seek(position_to_rewind_to)
-        await ctx.send(f'Rewound player to position `{convertDuration(position_to_rewind_to)}`.')
+        await interaction.response.send_message(f'Rewound player to position `{convertDuration(position_to_rewind_to)}`.', ephemeral=True)
+        return
 
-    @commands.command(help='Fast-forwards the player by a number of seconds. Default is 10 seconds. '
-                           'Syntax: "!fastforward [seconds to fastforward]"')
-    async def fastforward(self, ctx, fastforward_time: int = 10) -> None:
-        await runChecks(ctx)
+    #@commands.command(help='Fast-forwards the player by a number of seconds. Syntax: "!fastforward [seconds to fastforward]"')
+    @app_commands.command(name='fastforward', description='Fast-forwards the player by a number of seconds. Syntax: "!fastforward [seconds to fastforward]"')
+    async def fastforward(self, interaction: discord.Interaction, fastforward_time: int = 10) -> None:
+        await runChecks(interaction)
         # Check if player is running
-        player: wavelink.Player = await checkPlayer(ctx)
+        player: wavelink.Player = await checkPlayer(interaction)
         if not player:
             return
 
@@ -353,24 +394,30 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         if ff_time > int(player.position) or ff_time < 0:
             # Skip to the next song in queue. Stop playback if queue is empty
             if player.queue.is_empty:
-                await ctx.send('Stopping playback because there\'s no more songs in the queue.')
+                await interaction.response.send_message('Stopping playback because there\'s no more songs in the queue.', ephemeral=True)
                 await player.stop()
-                return logCommand(ctx.author, 'fastforward')
+                logCommand(interaction.user, 'fastforward')
+                return
 
             await player.play(player.queue.get())
-            await ctx.send('Skipping to next song in queue.')
-            return await logCommand(ctx.author, 'fastforward')
+            await interaction.response.send_message('Skipping to next song in queue.', ephemeral=True)
+            await logCommand(interaction.user, 'fastforward')
+            return
 
         position_to_ff_to = int(player.position + ff_time)
         await player.seek(position_to_ff_to)
-        await ctx.send(f'Fast-forwarded player to position `{convertDuration(position_to_ff_to)}`.')
+        await interaction.response.send_message(f'Fast-forwarded player to position `{convertDuration(position_to_ff_to)}`.', ephemeral=True)
+        return
 
-    @commands.command(help='Seek a specific position in the currently playing track. Syntax: '
-                           '"!seek <position to move to, in format (HH:)MM:SS. HH optional.>"')
-    async def seek(self, ctx, position: str) -> None:
-        await runChecks(ctx)
+    #@commands.command(help='Seek to a position in the currently playing track. Syntax: "/seek <position, in format (HH:)MM:SS>"')
+    @app_commands.command(name='seek', description='Seek to a position in the currently playing track. Syntax: "/seek <position, in format (HH:)MM:SS>"')
+    async def seek(self, interaction: discord.Interaction, position: str) -> None:
+        # Run checks
+        if not await runChecks(interaction):
+            return
+
         # Check if player is running
-        player: wavelink.Player = await checkPlayer(ctx)
+        player: wavelink.Player = await checkPlayer(interaction)
         if not player:
             return
 
@@ -383,35 +430,43 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
             # If the position is not less than zero or greater than the video length
             if not 0 <= time_to_seek < current_player_length:
-                return await ctx.send('The seek-to position must not be longer than the video, or less than zero.')
+                await interaction.response.send_message('The seek-to position must not be longer than the video, or less than zero.', ephemeral=True)
+                return
 
             # Seek to the position, and send a corresponding message
             await player.seek(time_to_seek)
             if time_to_seek > current_player_time:
-                await ctx.send(f'Fast-forwarded to `{position}` in video.')
+                await interaction.response.send_message(f'Fast-forwarded to `{position}` in video.', ephemeral=True)
             else:
-                await ctx.send(f'Re-winded video to `{position}`.')
+                await interaction.response.send_message(f'Re-winded video to `{position}`.', ephemeral=True)
 
             # Log command usage
-            logCommand(ctx.author, 'seek')
+            logCommand(interaction.user, 'seek')
+            return
 
         else:
-            return await ctx.send('Invalid position to seek to. Check command help page with '
-                                  '"!help seek" for more information.')
+            await interaction.response.send_message('Invalid position to seek to. Check command help page with '
+                           '"/help seek" for more information.', ephemeral=True)
+            return
 
-    @commands.command(help='ipsum dolor')
-    async def playerinfo(self, ctx) -> None:
-        await runChecks(ctx)
+    #@commands.command(help='Show information regarding the current track and queue.')
+    @app_commands.command(name='playerinfo', description='Show information regarding the current track and queue.')
+    async def playerinfo(self, interaction: discord.Interaction) -> None:
+        # Run checks
+        if not await runChecks(interaction):
+            return
+
         # Check if player is running
-        player: wavelink.Player = await checkPlayer(ctx)
+        player: wavelink.Player = await checkPlayer(interaction)
         if not player:
             return
 
         # Check if player is running
         if not player.current:
-            return await ctx.send('No track is currently playing, and the queue is empty.')
+            await interaction.response.send_message('No track is currently playing, and the queue is empty.', ephemeral=True)
+            return
 
-        # Create vars
+            # Create vars
         video_id = player.current.uri.replace('https://www.youtube.com/watch?v=', '')
         thumbnail_url = f'https://img.youtube.com/vi/{video_id}/maxresdefault.jpg'
 
@@ -428,10 +483,11 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         embed.add_field(name='Current Queue Length:', value=len(player.queue))
         embed.add_field(name='Volume', value=player.volume)
         embed.set_image(url=thumbnail_url)
-        await ctx.send(embed=embed)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
         # Log command usage
-        logCommand(ctx.author, 'playerinfo')
+        logCommand(interaction.user, 'playerinfo')
+        return
 
 
 async def setup(bot):
