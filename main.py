@@ -1,6 +1,7 @@
 # Imports
 # from bot.core import bot, botSetup
 import discord
+import pretty_help
 from discord import app_commands
 from discord.ext import commands
 from pretty_help import PrettyHelp
@@ -18,7 +19,7 @@ from utils.bot_utils import errorOccurred
 load_dotenv()
 BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 OWNER_ID = int(os.getenv("BOT_OWNER_ID"))
-custom_status = 'Use "!help" for help.'
+custom_status = 'Use "/help" for help.'
 
 
 class Bot(commands.Bot):
@@ -34,10 +35,12 @@ class Bot(commands.Bot):
         # Set some bot values and PrettyHelp values
         super().__init__(
             command_prefix='!', owner_id=OWNER_ID, intents=defIntents(), help_command=PrettyHelp(
-            color=discord.Color.from_rgb(1, 162, 186),
-            index_title='B.O.B Help Menu',
-            no_category='Miscellaneous Commands',
-            thumbnail_url='https://cdn.discordapp.com/avatars/1154825794963640390/ff31b0d57ab76713dba89da69a16fe35.webp?size=4096&width=913&height=913'
+                color=discord.Color.from_rgb(1, 162, 186),
+                index_title='B.O.B Help Menu',
+                no_category='Miscellaneous Commands',
+                thumbnail_url='https://cdn.discordapp.com/avatars/1154825794963640390/ff31b0d57ab76713dba89da69a16fe35.webp?size=4096&width=913&height=913',
+                menu=pretty_help.AppMenu(ephemeral=True)
+
 ))
 
     # Define on_ready() message
@@ -65,23 +68,22 @@ Custom Status: "{custom_status}"
         await wavelink.NodePool.connect(client=self, nodes=[node], spotify=sc)
 
     # NOT WORKING!
-    async def on_tree_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
-        if isinstance(error, app_commands.MissingPermissions):
-            print('amogus')
-            return await interaction.response.send_message('You don\'t have permission to use this command.', ephemeral=True)
-        elif isinstance(error, app_commands.CommandNotFound):
-            print('amogus')
-            return await interaction.response.send_message('That command doesn\'t exist.', ephemeral=True)
-        elif isinstance(error, app_commands.Argument):
-            print('amogus')
-            return await interaction.response.send_message('The provided arguments are invalid. Check your command arguments '
-                                                    'and its\' proper syntax in the help menu, and try again. '
-                                                    'Use "`/help [command]`" to see a help page regarding the command.',
-                                                    ephemeral=True)
-        else:
-            print('amogus')
-            return await interaction.response.send_message('error testing', ephemeral=True)
-
+    #async def on_tree_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+    #    if isinstance(error, app_commands.MissingPermissions):
+    #        print('amogus')
+    #        return await interaction.response.send_message('You don\'t have permission to use this command.', ephemeral=True)
+    #    elif isinstance(error, app_commands.CommandNotFound):
+    #        print('amogus')
+    #        return await interaction.response.send_message('That command doesn\'t exist.', ephemeral=True)
+    #    elif isinstance(error, app_commands.Argument):
+    #        print('amogus')
+    #        return await interaction.response.send_message('The provided arguments are invalid. Check your command arguments '
+    #                                                'and its\' proper syntax in the help menu, and try again. '
+    #                                                'Use "`/help [command]`" to see a help page regarding the command.',
+    #                                                ephemeral=True)
+    #    else:
+    #        print('amogus')
+    #        return await interaction.response.send_message('error testing', ephemeral=True)
 
     # Add a handler for missing command arguments.
     async def on_command_error(self, ctx, error):

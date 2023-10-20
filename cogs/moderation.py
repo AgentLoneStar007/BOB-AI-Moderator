@@ -2,6 +2,7 @@
 import os.path
 from discord.ext import commands, tasks
 import discord
+from discord import app_commands
 import re
 from datetime import datetime
 from datetime import timedelta
@@ -11,8 +12,8 @@ from utils.logger import log, logCogLoad
 from utils.bot_utils import sendMessage
 
 
-# TODO: (RE-ENABLE BANNING IN TEMPBAN COMMAND!!)
-# TODO: Migrate commands to Discord app commands
+# TODO: (RE-ENABLE BANNING IN TEMP-BAN COMMAND!!)
+
 def loadBlockedWords():
     with open('data/moderation/blocked_words.txt', 'r') as file:
         lines = file.readlines()
@@ -37,14 +38,16 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
 
     # Listener: On Ready
     @commands.Cog.listener()
-    async def on_ready(self):
+    async def on_ready(self) -> None:
         print(f'Extension loaded: {self.__class__.__name__}')
         logCogLoad(self.__class__.__name__)
         self.checkForNeededUnbans.start()
         print('Started background task "Check for Needed Unbans."')
+        return
 
+    # TODO: Add returns in this function
     # Create functions
-    async def handleSpam(self, user, level: int):
+    async def handleSpam(self, user, level: int) -> None:
         user_id = str(user.id)
 
         if level == 1 and not any(user_id in counts for counts in (self.user_message_counts_2, self.user_message_counts_3)):
@@ -77,9 +80,10 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
             await user.remove_roles(role)
             del self.user_message_counts_3[user_id]
 
+    # TODO: Add returns in this function as well
     # Listener: On Message
     @commands.Cog.listener()
-    async def on_message(self, message):
+    async def on_message(self, message) -> None:
         # Check if the message was sent by a bot to avoid responding to bots
         if message.author.bot:
             return
@@ -140,9 +144,11 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
             if user_id in user_message_counts_3:
                 user_message_counts_3[user_id] -= 1
 
+    # TODO: Finish the status checking system
     # Listener: On Member Update
+    # NOT WORKING YET!
     @commands.Cog.listener()
-    async def on_member_update(self, before, after):
+    async def on_member_update(self, before, after) -> None:
         # Ignore updates from bots
         if before.bot:
             return
@@ -166,9 +172,10 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
                     # Stop checking for blocked words after the first word is found
                     return
 
+    # TODO: Verify functionality of unbanning system (the rest of it works already)
     # Task: Check for users needing to be unbanned
     @tasks.loop(minutes=5.0)
-    async def checkForNeededUnbans(self):
+    async def checkForNeededUnbans(self) -> None:
         # Open and parse data
         with open('data/moderation/unban_times.json', 'r') as file:
             data = json.load(file)
@@ -199,49 +206,57 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
                     # Notify that the user has been unbanned
                     await sendMessage(self.bot, self.bot_output_channel, f'User {user} unbanned.'
                                                                          f' Reason: "{reason}"')
+                    return
 
                 else:
                     # The user was not found in the guild
                     await sendMessage(self.bot, self.bot_output_channel, f'User {user}\'s temporary ban has '
                                                                          f'expired, but could not be found in the guild to unban.')
+                    return
             else:
                 return
 
     # Command: Kick
-    @commands.command(help='Kick a user from the server. Syntax: "!kick <user>"')
-    @commands.has_permissions(kick_members=True)  # Only allow users with kick permissions to use this command
-    async def kick(self, ctx, user: discord.Member, *, reason="No reason was provided."):
+    @app_commands.command(name='kick', description='Kick a user from the server. Syntax: "/kick <user>"')
+    @discord.app_commands.checks.has_permissions(kick_members=True)
+    async def kick(self, interaction: discord.Interaction, user: discord.Member, *, reason: str = "No reason was provided.") -> None:
         try:
             # Kick the user and log it to #bot-output and to file
             message = f'{user.display_name} has been kicked from the server. Reason: "{reason}"'
             await user.kick(reason=reason)
             await sendMessage(self.bot, self.bot_output_channel, message)
             log('info', message)
+            return
         except discord.Forbidden:
-            await ctx.send('You don\'t have permission to use this command.')
+            await interaction.response.send_message('You don\'t have permission to use this command.', ephemeral=True)
+            return
         except discord.HTTPException as e:
-            await ctx.send(f'An error occurred trying to kick user {user}: {e}')
+            await interaction.response.send_message(f'An error occurred trying to kick user {user}: {e}', ephemeral=True)
+            return
 
     # Command: Ban
-    @commands.command(help='Ban a user from the server. Syntax: "!ban <user>"')
-    @commands.has_permissions(ban_members=True)  # Only people with the ban permission can use this command
-    async def ban(self, ctx, user: discord.Member, *, reason='No reason was provided.'):
+    @app_commands.command(name='ban', description='Ban a user from the server. Syntax: "/ban <user>"')
+    @app_commands.checks.has_permissions(kick_members=True)
+    async def ban(self, interaction: discord.Interaction, user: discord.Member, *, reason: str = 'No reason was provided.') -> None:
         try:
             # Ban the user and log it to #bot-output and to file
             message = f'{user.display_name}(ID: {user.id}) has been banned from the server. Reason: "{reason}"'
             await user.ban(reason=reason)
             await sendMessage(self.bot, self.bot_output_channel, message)
             log('info', message)
+            return
         except discord.Forbidden:
-            await ctx.send('You don\'t have permission to use this command.')
+            await interaction.response.send_message('You don\'t have permission to use this command.', ephemeral=True)
+            return
         except discord.HTTPException as e:
-            await ctx.send(f'An error occurred: {e}')
+            await interaction.response.send_message(f'An error occurred: {e}', ephemeral=True)
+            return
 
     # Command: TempBan
-    @commands.command(
-        help='Temporarily ban a user from the server. Syntax: "!tempban <user> <duration in minutes> [reason]"')
-    @commands.has_permissions(ban_members=True)
-    async def tempban(self, ctx, member: discord.Member, duration: int, *, reason=""):
+    @app_commands.command(name='tempban', description=
+                          'Temporarily ban a user from the server. Syntax: "/tempban <user> <duration in minutes> [reason]"')
+    @app_commands.checks.has_permissions(ban_members=True)
+    async def tempban(self, interaction: discord.Interaction, member: discord.Member, duration: int, *, reason: str = "") -> None:
 
         # Get the current time in UTC, get the time that it will be to unban the user, and format it to a string
         current_time = datetime.utcnow()
@@ -268,69 +283,80 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
         with open('data/moderation/unban_times.json', 'w') as file:
             json.dump(existing_temp_bans, file, indent=2)
 
+        # TODO: Put in a try/except block
         # Ban the user
         # await member.ban(reason=reason)
 
         # Now log the temp ban in the #bot-output channel, and to file (probably more optimizing could be done here)
         await sendMessage(self.bot, self.bot_output_channel, f'{member.mention}(ID: {member.id}) has been temporarily banned till {unban_time} UTC. Reason: "{reason}".')
+        await interaction.response.send_message(f'{member.mention} was temporarily banned. See `#bot-output` for more info.`', ephemeral=True)
         log('info', f'{member.name}(ID: {member.id}) has been temporarily banned till {unban_time} UTC. Reason: "{reason}".')
+        return
 
-    @commands.command(help='Unbans a user. Syntax: "!unban <user ID>"')
-    @commands.has_permissions(ban_members=True)
-    async def unban(self, ctx, user_id: int):
+    # Command: Unban
+    @app_commands.command(name='unban', description='Unbans a user. Syntax: "/unban <user ID>"')
+    @app_commands.checks.has_permissions(ban_members=True)
+    async def unban(self, interaction: discord.Interaction, user_id: int) -> None:
         # Get the guild (server) object
-        guild = ctx.guild
+        guild = interaction.guild
 
         # Check if the user is banned
-        bans = await guild.bans()
-        banned_user = discord.utils.get(bans, user__id=user_id)
+        bans = guild.bans()
+        banned_user = await discord.utils.get(bans, user__id=user_id)
 
         if banned_user:
             # Unban the user
             await guild.unban(banned_user.user)
 
             # Notify that the user has been unbanned
-            message = f'User with ID "{user_id}" has been unbanned by {ctx.author}.'
+            message = f'User with ID "{user_id}" has been unbanned by {interaction.user}.'
             await sendMessage(self.bot, self.bot_output_channel, message)
             await log('info', message)
+            return
         else:
             # Notify that the user is not banned.
-            await ctx.send('That user has not been banned.')
-            log('info', f'{ctx.author} attempted to unban user with ID "{user_id}."')
+            await interaction.response.send_message('That user has not been banned.', ephemeral=True)
+            log('info', f'{interaction.user} attempted to unban user with ID "{user_id}."')
+            return
 
     # Command: Purge
-    @commands.command(help='Delete a specified number of messages. (Limit 100.)')
-    @commands.has_permissions(
-        manage_messages=True)  # Only allow users with message management permissions to use this command
-    async def purge(self, ctx, amount: int):
+    @app_commands.command(name='purge', description='Delete a specified number of messages. (Limit 100.)')
+    @app_commands.checks.has_permissions(manage_messages=True)
+    async def purge(self, interaction: discord.Interaction, amount: int) -> None:
         # Check if the specified amount is within the allowed range
         if 1 <= amount <= 100:
-            logMessage = f'User {ctx.author} purged {amount} message(s) from channel "{ctx.channel}."'
+            logMessage = f'User {interaction.user} purged {amount} message(s) from channel "{interaction.channel}."'
             # Delete the specified number of messages (including the command message)
-            deleted = await ctx.channel.purge(limit=amount + 1)
+            deleted = await interaction.channel.purge(limit=amount + 1)
             # Send a notifying message, then delete it after three seconds.
             if amount == 1:
-                notifying_message = await ctx.send('Deleted the last sent message.')
+                # Make the message pretty if it's only one message to delete
+                notifying_message = await interaction.response.send_message('Deleted the last sent message.', ephemeral=True)
                 log('info', logMessage)
             else:
-                notifying_message = await ctx.send(f'Deleted the last {len(deleted) - 1} messages.')
+                notifying_message = await interaction.response.send_message(f'Deleted the last {len(deleted) - 1} messages.', ephemeral=True)
                 log('info', logMessage)
+            # Wait for three seconds, then delete the notification message
             await asyncio.sleep(3)
             await notifying_message.delete()
         else:
-            logMessage = f'User {ctx.author} attempted to purge {amount} message(s) from channel "{ctx.channel}."'
+            # Log the attempted usage of the command
+            logMessage = f'User {interaction.user} attempted to purge {amount} message(s) from channel "{interaction.channel}."'
             if amount < 1:
-                await ctx.send('The amount must be at least one.')
+                await interaction.response.send_message('The amount must be at least one.', ephemeral=True)
                 log('info', logMessage)
             elif amount > 100:
-                await ctx.send("The amount must be under 100.")
+                await interaction.response.send_message("The amount must be under 100.", ephemeral=True)
                 log('info', logMessage)
+            return
 
-    @commands.command(help='Reload the list of blocked words.')
-    @commands.has_permissions(manage_messages=True)
-    async def reloadblockedwords(self, ctx):
+    # Command: ReloadBlockedWords
+    @app_commands.command(name='reloadblockedwords', description='Reload the list of blocked words.')
+    @app_commands.checks.has_permissions(manage_messages=True)
+    async def reloadblockedwords(self, interaction: discord.Interaction) -> None:
         self.blocked_words = loadBlockedWords()
-        await ctx.send('Blocked words reloaded!')
+        await interaction.response.send_message('Blocked words reloaded!', ephemeral=True)
+        return
 
 
 async def setup(bot):
