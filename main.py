@@ -13,12 +13,12 @@ import os
 from utils.load_extensions import loadExtensions
 from utils.logger import log, logsInit
 from utils.intents import defIntents
-from utils.bot_utils import errorOccurred
 
 # Vars
 load_dotenv()
 BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 OWNER_ID = int(os.getenv("BOT_OWNER_ID"))
+WAVELINK_PASSWORD = os.getenv("WAVELINK_PASSWORD")
 custom_status = 'Use "/help" for help.'
 
 
@@ -41,10 +41,11 @@ class Bot(commands.Bot):
                 thumbnail_url='https://cdn.discordapp.com/avatars/1154825794963640390/ff31b0d57ab76713dba89da69a16fe35.webp?size=4096&width=913&height=913',
                 menu=pretty_help.AppMenu(ephemeral=True)
 
-))
+            ))
 
-    # Define on_ready() message
+    # On bot ready...
     async def on_ready(self) -> None:
+        # Print a message to the console
         print(f'''
 ------------------------------
 {self.user.name} is online and ready.
@@ -55,59 +56,49 @@ Custom Status: "{custom_status}"
         # Log ready event
         log('info', f'{self.user.name} online and ready.')
 
-        # Change bot status
+        # Change the bots' status
         await self.change_presence(status=discord.Status.online, activity=discord.CustomActivity(custom_status))
 
     # Create setup hook for Wavelink music player
     async def setup_hook(self) -> None:
-        node: wavelink.Node = wavelink.Node(uri='http://localhost:2333', password='YouShallNotPass')
-        sc: spotify.SpotifyClient = spotify.SpotifyClient(
-            client_id='...',
-            client_secret='...'
-        )
-        await wavelink.NodePool.connect(client=self, nodes=[node], spotify=sc)
+        node: wavelink.Node = wavelink.Node(uri='http://localhost:2333', password=WAVELINK_PASSWORD)
+        await wavelink.NodePool.connect(client=self, nodes=[node])
 
-    # NOT WORKING!
-    #async def on_tree_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
-    #    if isinstance(error, app_commands.MissingPermissions):
-    #        print('amogus')
-    #        return await interaction.response.send_message('You don\'t have permission to use this command.', ephemeral=True)
-    #    elif isinstance(error, app_commands.CommandNotFound):
-    #        print('amogus')
-    #        return await interaction.response.send_message('That command doesn\'t exist.', ephemeral=True)
-    #    elif isinstance(error, app_commands.Argument):
-    #        print('amogus')
-    #        return await interaction.response.send_message('The provided arguments are invalid. Check your command arguments '
-    #                                                'and its\' proper syntax in the help menu, and try again. '
-    #                                                'Use "`/help [command]`" to see a help page regarding the command.',
-    #                                                ephemeral=True)
-    #    else:
-    #        print('amogus')
-    #        return await interaction.response.send_message('error testing', ephemeral=True)
-
-    # Add a handler for missing command arguments.
+    # Add a handler for anyone trying to use old command system
     async def on_command_error(self, ctx, error):
-        if isinstance(error, commands.MissingRequiredArgument):
-            # Handler for missing arguments
-            await ctx.send('You failed to provide some required arguments. Please try again. '
-                           'Use "`/help [command]`" to see a help page related to that command.',)
-        elif isinstance(error, commands.MissingPermissions):
-            # Handler for missing permissions
-            await ctx.send('You don\'t have permission to use this command.')
-        elif isinstance(error, commands.CommandNotFound):
-            # Handler for a non-existent command
-            await ctx.send('That command doesn\'t exist.')
-        elif isinstance(error, commands.BadArgument):
-            await ctx.send('The provided arguments are invalid. Check your command arguments '
-                           'and its\' proper syntax in the help menu, and try again. '
-                           'Use "`/help [command]`" to see a help page regarding the command.')
+        message = ('I no longer support regular bot commands. Instead, use Discord\'s built-in app commands! Use '
+                   '`/help` for a list of available commands.')
+        if isinstance(error, commands.CommandNotFound):
+            await ctx.send(message, ephemeral=True)
         else:
-            await errorOccurred(ctx, error)
+            await ctx.send(message, ephemeral=True)
 
 
 async def run() -> None:
+    # Create the bot from the Bot class
     bot = Bot()
 
+    # Add some error handling for slash commands. I'm putting this down here, and not in the Bot class, because I need
+    #  to use the "bot" variable, but I'm not smart enough to access the bot variable inside the class.
+    @bot.tree.error
+    async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+        # Handler for missing permissions
+        if isinstance(error, app_commands.MissingPermissions):
+            print(f'User {interaction.user} was unable to run command "{interaction.command.name}" due to insufficient permissions.')
+            return await interaction.response.send_message('You don\'t have permission to use this command.')
+        # So far no other handlers are required, because AppCommands automatically requires correct argument types
+        #  and "CommandNotFound" errors are (to my knowledge) impossible with slash commands.
+
+        # General error handler
+        else:
+            # Defining the error message as a variable for optimization
+            error_message = f'Error occurred while running command "{interaction.command.name}:" {error}'
+            print(error)
+            await interaction.response.send_message(
+                f'An error occurred when trying to run that command:\n```{error}```', ephemeral=True)
+            return log('warn', error_message)
+
+    # Load extensions and start bot, all in time with the bot itself
     async with bot:
         await loadExtensions(bot)
         await bot.start(BOT_TOKEN)

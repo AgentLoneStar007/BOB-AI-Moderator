@@ -20,8 +20,3 @@ async def sendMessage(bot, channel_id: str, message: str):
     except ValueError:
         print(f'Failed to send message to channel ID "{channel_id}." Invalid ID.')
 
-
-async def errorOccurred(ctx, error):
-    print(f'The following error occurred when trying to run a command: "{error}"')
-    await ctx.send(f'The following error occurred when trying to run that command: "`{error}`"',)
-

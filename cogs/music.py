@@ -3,7 +3,6 @@ import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 import wavelink
-from wavelink.ext import spotify  # Spotify not supported, but maybe eventually...
 import datetime
 import re
 from utils.logger import logCommand, log

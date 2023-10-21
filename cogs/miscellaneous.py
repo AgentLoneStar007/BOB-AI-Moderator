@@ -5,9 +5,6 @@ from discord.ext import commands
 from utils.logger import logCommand, log
 
 
-# TODO: Either figure out hybrid commands, or use app commands everywhere
-
-
 class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
     def __init__(self, bot):
         self.bot = bot
