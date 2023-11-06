@@ -66,7 +66,7 @@ Custom Status: "{custom_status}"
 
     # Add a handler for anyone trying to use old command system
     async def on_command_error(self, ctx, error):
-        message = ('I no longer support regular bot commands. Instead, use Discord\'s built-in app commands! Use '
+        message = ('I no longer support regular bot commands. Instead, I use Discord\'s built-in app commands! Use '
                    '`/help` for a list of available commands.')
         if isinstance(error, commands.CommandNotFound):
             await ctx.send(message, ephemeral=True)

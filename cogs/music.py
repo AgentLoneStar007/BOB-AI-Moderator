@@ -157,12 +157,14 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
     # Run Before Task: Check if connected to voice channel
     @checkIfConnectedToVoiceChannel.before_loop
     async def before_check_if_connected_to_voice_channel(self) -> None:
+        # Wait till bot is ready before starting task
         await self.bot.wait_until_ready()
         return
 
     # Listener: On Track End
     @commands.Cog.listener()
     async def on_wavelink_track_end(self, payload: wavelink.TrackEventPayload) -> None:
+        # Go to the next song in the queue on track end if queue isn't empty
         player: wavelink.Player = payload.player
         if not player.queue.is_empty:
             next_track = player.queue.get()
@@ -171,6 +173,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
     # Command: Play
     @app_commands.command(name='play', description='Play a YouTube video in a voice chat. Syntax: "/play <URL or search term>"')
+    @app_commands.describe(query='The search term or YouTube video URL to play.')
     async def play(self, interaction: discord.Interaction, *, query: str) -> None:
         # Get user VC
         user_vc = interaction.user.voice
@@ -187,6 +190,14 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             player: wavelink.Player = interaction.guild.voice_client
             if player.is_playing() and user_vc.channel != interaction.guild.voice_client.channel:
                 return await interaction.response.send_message('I am already playing music in another channel.', ephemeral=True)
+
+            # Check if player is not playing music, and user is in different VC
+            if not player.is_playing() and not player.is_paused() and user_vc.channel != interaction.guild.voice_client.channel:
+                print('amogus')
+                await interaction.guild.voice_client.disconnect(force=False)
+                print('disconnected')
+                player: wavelink.Player = await interaction.user.voice.channel.connect(cls=wavelink.Player)
+                print(player)
 
         tracks: list[wavelink.YouTubeTrack] = await wavelink.YouTubeTrack.search(query)
         if not tracks:
@@ -222,11 +233,11 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         else:
             # TODO: Add system that moves the bot to another channel upon request if bot is already present
             #  in a channel, but not playing music and not paused
-            # Check if player is not playing music, and user is in different VC
-            #if not player.is_playing() and player.is_paused() and user_vc.channel != interaction.guild.voice_client.channel:
 
             # Create the embed
+            print(player)
             await player.play(track)
+            print(f'playing track: {track}')
             embed = discord.Embed(
                 title=track.title,
                 url=track.uri,
@@ -332,6 +343,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
     # Command: Volume
     @app_commands.command(name='volume', description='Adjusts the volume of the music player. Syntax: "/volume <volume>"')
+    @app_commands.describe(volume='The volume to set the player to.')
     async def volume(self, interaction: discord.Interaction, volume: int) -> None:
         # Run checks
         if not await runChecks(interaction, UserInDifferentVCMsg='You can only adjust the volume of the music if you\'re in the same voice channel as me.'):
@@ -356,6 +368,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
     # Command: Rewind
     @app_commands.command(name='rewind', description='Rewinds the player by a number of seconds. Syntax: "/rewind [seconds to rewind]"')
+    @app_commands.describe(rewind_time='The time, in seconds, to rewind.')
     async def rewind(self, interaction: discord.Interaction, rewind_time: int = 10) -> None:
         # Run checks
         if not await runChecks(interaction):
@@ -381,6 +394,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
     # Command: FastForward
     @app_commands.command(name='fastforward', description='Fast-forwards the player by a number of seconds. Syntax: "/fastforward [seconds to fastforward]"')
+    @app_commands.describe(fastforward_time='The time, in seconds, to fast-forward.')
     async def fastforward(self, interaction: discord.Interaction, fastforward_time: int = 10) -> None:
         await runChecks(interaction)
         # Check if player is running
@@ -410,6 +424,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
     # Command: Seek
     @app_commands.command(name='seek', description='Seek to a position in the currently playing track. Syntax: "/seek <position, in format (HH:)MM:SS>"')
+    @app_commands.describe(position='The time to seek to in the track.')
     async def seek(self, interaction: discord.Interaction, position: str) -> None:
         # Run checks
         if not await runChecks(interaction):

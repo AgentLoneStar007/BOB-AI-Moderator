@@ -39,6 +39,7 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
         logCommand(interaction.user, 'info', interaction.channel)
 
     @app_commands.command(name='load', description='Load a cog. (Only usable by bot owner.)')
+    @app_commands.describe(cog_name='The name of the cog to load.')
     async def load(self, interaction: discord.Interaction, cog_name: str):
         # Format the cog name
         cog_name = cog_name.lower()
@@ -60,6 +61,7 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
             log('err', f'Failed to load cog "{cog_name}" with the following error: {e}')
 
     @app_commands.command(name='unload', description='Unload a cog. (Only usable by bot owner.)')
+    @app_commands.describe(cog_name='The name of the cog to unload.')
     async def unload(self, interaction: discord.Interaction, cog_name: str):
         cog_name = cog_name.lower()
 
@@ -82,6 +84,7 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
             return await interaction.response.send_message(f'An error occurred while unloading cog "{cog_name}": {e}')
 
     @app_commands.command(name='reload', description='Reload a cog. (Only usable by bot owner.)')
+    @app_commands.describe(cog_name='The name of the cog to reload.')
     async def reload(self, interaction: discord.Interaction, cog_name: str):
         cog_name = cog_name.lower()
 
