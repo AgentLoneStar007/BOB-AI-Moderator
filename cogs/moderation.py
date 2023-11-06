@@ -144,33 +144,40 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
             if user_id in user_message_counts_3:
                 user_message_counts_3[user_id] -= 1
 
-    # TODO: Finish the status checking system
+    # TODO: Finish the status checking system by adding an auto-kick system after a certain amount of time has passed
     # Listener: On Member Update
-    # NOT WORKING YET!
     @commands.Cog.listener()
-    async def on_member_update(self, before, after) -> None:
+    async def on_presence_update(self, before, after) -> None:
         # Ignore updates from bots
         if before.bot:
             return
 
-        print('amogus')
-
         # Check user status to see if it's changed
-        if before.status != after.status:
-            user_status = str(after.status)
+        if before.activity != after.activity:
+            user_status = str(after.activity)
+            user_status = re.sub(r'[^a-zA-Z0-9]', '', user_status.lower())
+
             for blocked_word in self.blocked_words:
                 if re.search(rf'\b{re.escape(blocked_word)}\b', user_status):
-                    # Notify moderators of the rule-breaking status
-                    dm_channel = await after.create_dm()
-                    await dm_channel.send(f'{after.author.mention}, your status contains a rule-breaking word or phrase.'
+                    # Notify the user of their infraction
+                    await after.send(f'{after.mention}, your status contains a rule-breaking word or phrase.'
                                           ' If this is in error, please reach out to a moderator. '
                                           'If you do not update your status, you will be kicked from the server.')
-                    await sendMessage(self.bot, self.bot_output_channel, f'User {after.author.mention} has a '
-                                                                         'status containing a blocked word or phrase.')
-                    log('info', f'User {after.author} has a status containing a blocked word or phrase.')
+
+                    # Notify moderators of the rule-breaking status
+                    await sendMessage(self.bot, self.bot_output_channel, f'User {after.mention} has a status containing a blocked word or phrase.')
+
+                    # Log the offense to console and logfile
+                    message = f'User {after.display_name} has a status containing a blocked word or phrase.'
+                    print(message)
+                    log('info', message)
 
                     # Stop checking for blocked words after the first word is found
-                    return
+                    break
+            # Return if no bad words found
+            return
+        # Return if status is unchanged
+        return
 
     # TODO: Verify functionality of unbanning system (the rest of it works already)
     # Task: Check for users needing to be unbanned
