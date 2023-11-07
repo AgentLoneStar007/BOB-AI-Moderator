@@ -50,7 +50,8 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
     async def handleSpam(self, user, level: int) -> None:
         user_id = str(user.id)
 
-        if level == 1 and not any(user_id in counts for counts in (self.user_message_counts_2, self.user_message_counts_3)):
+        if level == 1 and not any(
+                user_id in counts for counts in (self.user_message_counts_2, self.user_message_counts_3)):
             already_run = False
             try:
                 del self.user_message_counts_1[user_id]
@@ -59,9 +60,10 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
             if not already_run:
                 self.user_message_counts_2[user_id] = 0
                 await user.send('Stop spamming. This is your first warning. '
-                            'You will be muted for five minutes upon your third warning.')
+                                'You will be muted for five minutes upon your third warning.')
 
-        elif level == 2 and not any(user_id in counts for counts in (self.user_message_counts_1, self.user_message_counts_3)):
+        elif level == 2 and not any(
+                user_id in counts for counts in (self.user_message_counts_1, self.user_message_counts_3)):
             already_run = False
             try:
                 del self.user_message_counts_2[user_id]
@@ -72,7 +74,8 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
                                 'You will be muted for five minutes upon your third.')
                 self.user_message_counts_3[user_id] = 0
 
-        elif level == 3 and not any(user_id in counts for counts in (self.user_message_counts_1, self.user_message_counts_2)):
+        elif level == 3 and not any(
+                user_id in counts for counts in (self.user_message_counts_1, self.user_message_counts_2)):
             await user.send('You have been muted for five minutes.')
             role = discord.utils.get(user.guild.roles, name="MUTED")
             await user.add_roles(role)
@@ -161,11 +164,12 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
                 if re.search(rf'\b{re.escape(blocked_word)}\b', user_status):
                     # Notify the user of their infraction
                     await after.send(f'{after.mention}, your status contains a rule-breaking word or phrase.'
-                                          ' If this is in error, please reach out to a moderator. '
-                                          'If you do not update your status, you will be kicked from the server.')
+                                     ' If this is in error, please reach out to a moderator. '
+                                     'If you do not update your status, you will be kicked from the server.')
 
                     # Notify moderators of the rule-breaking status
-                    await sendMessage(self.bot, self.bot_output_channel, f'User {after.mention} has a status containing a blocked word or phrase.')
+                    await sendMessage(self.bot, self.bot_output_channel,
+                                      f'User {after.mention} has a status containing a blocked word or phrase.')
 
                     # Log the offense to console and logfile
                     message = f'User {after.display_name} has a status containing a blocked word or phrase.'
@@ -179,59 +183,74 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
         # Return if status is unchanged
         return
 
-    # TODO: Verify functionality of unbanning system (the rest of it works already)
+    # TODO: Add more error handling and clearer error messages
+    # TODO: Add console output regarding unbans
     # Task: Check for users needing to be unbanned
-    @tasks.loop(minutes=5.0)
+    @tasks.loop(minutes=2.0)
     async def checkForNeededUnbans(self) -> None:
         # Open and parse data
         with open('data/moderation/unban_times.json', 'r') as file:
             data = json.load(file)
 
         # Get the current UTC time
-        current_time = datetime.utcnow()
+        current_time_unformatted = datetime.utcnow()
+        current_time = current_time_unformatted.strftime('%Y-%m-%d %H:%M')
+
+        # Get the guild info
+        GUILD_ID = int(os.getenv("LONESTAR_GUILD_ID"))
+        guild = self.bot.get_guild(GUILD_ID)
 
         # Iterate through the "temp_banned_users" array and compare times
-        for entry in data.get("temp_banned_users", []):
-            user = entry.get("user")
+        for index, entry in enumerate(data.get("temp_banned_users", [])):
+            user_id = entry.get("user_id")
             time_to_unban_str = entry.get("time_to_unban")
 
             # Parse the time string from the entry into a datetime object
-            time_to_unban = datetime.strptime(time_to_unban_str, "%Y-%m-%d %H:%M")
+            time_to_unban = str(datetime.strptime(time_to_unban_str, "%Y-%m-%d %H:%M"))
 
             # Compare the current time with the time in the entry
             if current_time >= time_to_unban:
                 # Retrieve the user's ID by username (assuming the username is unique in the guild)
-                GUILD_ID = int(os.getenv("LONESTAR_GUILD_ID"))
-                guild = self.bot.get_guild(GUILD_ID)
-                member = discord.utils.get(guild.members, name=user)
+                member: discord.Member = await self.bot.fetch_user(user_id)
 
                 if member:
-                    reason = "Temporary ban on user expired."
-                    # Unban the user by their ID
-                    await guild.unban(member, reason=reason)
+                    # Unban the user
+                    # TODO: Add error handling here, in case unban doesn't work
+                    await guild.unban(member, reason='Temporary ban on user expired.')
+
+                    # Remove the temp-ban entry from the file, as because it's not needed anymore
+                    with open('data/moderation/unban_times.json', 'w') as file:
+                        del data['temp_banned_users'][index]
+                        json.dump(data, file, indent=2)
 
                     # Notify that the user has been unbanned
-                    await sendMessage(self.bot, self.bot_output_channel, f'User {user} unbanned.'
-                                                                         f' Reason: "{reason}"')
-                    return
+                    message = f'User {member.mention} was unbanned because their temporary ban expired.'
+                    await sendMessage(self.bot, self.bot_output_channel, message)
+                    return log('info', f'User {member.display_name} was unbanned because their temporary ban expired.')
 
                 else:
-                    # The user was not found in the guild
-                    await sendMessage(self.bot, self.bot_output_channel, f'User {user}\'s temporary ban has '
-                                                                         f'expired, but could not be found in the guild to unban.')
-                    return
+                    # Couldn't retrieve user info
+                    await sendMessage(self.bot, self.bot_output_channel,
+                                      f'User {member.display_name}\'s temporary ban has '
+                                      f'expired, but the user could not be '
+                                      f'found to be unbanned.')
+                    return log('info',
+                               f'User {member.display_name}\'s temporary ban expired, but failed to be unbanned.')
             else:
-                return
+                continue
+        return
 
     # Command: Kick
     @app_commands.command(name='kick', description='Kick a user from the server. Syntax: "/kick <user>"')
     @app_commands.describe(member='The member to kick.')
     @app_commands.describe(reason='The reason why the member is to be kicked. (Optional.)')
     @discord.app_commands.checks.has_permissions(kick_members=True)
-    async def kick(self, interaction: discord.Interaction, member: discord.Member, *, reason: str = "No reason was provided.") -> None:
+    async def kick(self, interaction: discord.Interaction, member: discord.Member, *,
+                   reason: str = "No reason was provided.") -> None:
         try:
             # Kick the user and log it to #bot-output and to file
-            await interaction.response.send_message(f'User {member.display_name} has been kicked from the server.', ephemeral=True)
+            await interaction.response.send_message(f'User {member.display_name} has been kicked from the server.',
+                                                    ephemeral=True)
             message = f'{member.display_name} has been kicked from the server. Reason: "{reason}"'
             await member.kick(reason=reason)
             await sendMessage(self.bot, self.bot_output_channel, message)
@@ -241,7 +260,8 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
             await interaction.response.send_message('You don\'t have permission to use this command.', ephemeral=True)
             return
         except discord.HTTPException as e:
-            await interaction.response.send_message(f'An error occurred trying to kick user {member}: {e}', ephemeral=True)
+            await interaction.response.send_message(f'An error occurred trying to kick user {member}: {e}',
+                                                    ephemeral=True)
             return
 
     # Command: Ban
@@ -249,13 +269,15 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
     @app_commands.describe(member='The member to ban.')
     @app_commands.describe(reason='The reason why the member is to be banned. (Optional.)')
     @app_commands.checks.has_permissions(kick_members=True)
-    async def ban(self, interaction: discord.Interaction, member: discord.Member, *, reason: str = 'No reason was provided.') -> None:
+    async def ban(self, interaction: discord.Interaction, member: discord.Member, *,
+                  reason: str = 'No reason was provided.') -> None:
         try:
             # Ban the user and log it to #bot-output and to file
             message = f'{member.display_name}(ID: {member.id}) has been banned from the server. Reason: "{reason}"'
             await member.ban(reason=reason)
             await sendMessage(self.bot, self.bot_output_channel, message)
-            await interaction.response.send_message(f'User `{member.display_name}` was banned from the server.', ephemeral=True)
+            await interaction.response.send_message(f'User `{member.display_name}` was banned from the server.',
+                                                    ephemeral=True)
             return log('info', message)
         except discord.Forbidden:
             await interaction.response.send_message('You don\'t have permission to use this command.', ephemeral=True)
@@ -266,12 +288,13 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
 
     # Command: TempBan
     @app_commands.command(name='tempban', description=
-                          'Temporarily ban a user from the server. Syntax: "/tempban <user> <duration in minutes> [reason]"')
+    'Temporarily ban a user from the server. Syntax: "/tempban <user> <duration in minutes> [reason]"')
     @app_commands.describe(member='The member to temporarily ban.')
     @app_commands.describe(duration='The duration in minutes to ban the member.')
     @app_commands.describe(reason='The reason why the member is to be banned. (Optional.)')
     @app_commands.checks.has_permissions(ban_members=True)
-    async def tempban(self, interaction: discord.Interaction, member: discord.Member, duration: int, *, reason: str = "") -> None:
+    async def tempban(self, interaction: discord.Interaction, member: discord.Member, duration: int, *,
+                      reason: str = "") -> None:
 
         # Get the current time in UTC, get the time that it will be to unban the user, and format it to a string
         current_time = datetime.utcnow()
@@ -279,7 +302,7 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
         unban_time = future_time.strftime("%Y-%m-%d %H:%M")
 
         # Create the dictionary entry
-        temp_banned_user = {'user': f'{member}', 'time_to_unban': unban_time}
+        temp_banned_user = {'user_id': f'{member.id}', 'time_to_unban': unban_time}
 
         # Create the reason (if needed)
         if reason == "":
@@ -303,9 +326,12 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
         await member.ban(reason=reason)
 
         # Now log the temp ban in the #bot-output channel, and to file (probably more optimizing could be done here)
-        await sendMessage(self.bot, self.bot_output_channel, f'{member.mention}(ID: {member.id}) has been temporarily banned till {unban_time} UTC. Reason: "{reason}".')
-        await interaction.response.send_message(f'{member.mention} was temporarily banned. See `#bot-output` for more info.`', ephemeral=True)
-        log('info', f'{member.name}(ID: {member.id}) has been temporarily banned till {unban_time} UTC. Reason: "{reason}".')
+        await sendMessage(self.bot, self.bot_output_channel,
+                          f'{member.mention}(ID: {member.id}) has been temporarily banned till {unban_time} UTC. Reason: "{reason}".')
+        await interaction.response.send_message(
+            f'{member.mention} was temporarily banned. See `#bot-output` for more info.', ephemeral=True)
+        log('info',
+            f'{member.name}(ID: {member.id}) has been temporarily banned till {unban_time} UTC. Reason: "{reason}".')
         return
 
     # Command: Unban
@@ -353,10 +379,12 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
             # Send a notifying message, then delete it after three seconds.
             if amount == 1:
                 # Make the message pretty if it's only one message to delete
-                notifying_message = await interaction.response.send_message('Deleted the last sent message.', ephemeral=True)
+                notifying_message = await interaction.response.send_message('Deleted the last sent message.',
+                                                                            ephemeral=True)
                 log('info', logMessage)
             else:
-                notifying_message = await interaction.response.send_message(f'Deleted the last {len(deleted) - 1} messages.', ephemeral=True)
+                notifying_message = await interaction.response.send_message(
+                    f'Deleted the last {len(deleted) - 1} messages.', ephemeral=True)
                 log('info', logMessage)
             # Wait for three seconds, then delete the notification message
             await asyncio.sleep(3)

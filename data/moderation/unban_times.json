@@ -1,8 +1,3 @@
 {
-  "temp_banned_users": [
-    {
-      "user": "agentlonestar007",
-      "time_to_unban": "2023-10-03 15:49"
-    }
-  ]
+  "temp_banned_users": []
 }
