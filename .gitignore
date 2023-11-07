@@ -161,4 +161,4 @@ cython_debug/
 
 # Custom
 logs/*
-config/moderation/unban_times.json
+data/moderation/unban_times.json
