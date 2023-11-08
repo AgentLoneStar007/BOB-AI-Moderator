@@ -2,19 +2,14 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
+from datetime import datetime
 from utils.logger import logCommand, log
+from utils.bot_utils import checkIfOwner
 
 
 class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
     def __init__(self, bot):
         self.bot = bot
-
-    # Custom owner check function for app commands
-    async def checkIfOwner(self, interaction: discord.Interaction):
-        if not interaction.user.id == self.bot.owner_id:
-            await interaction.response.send_message('Only the owner can use this command.', ephemeral=True)
-            return False
-        return True
 
     # Listener: On Ready
     @commands.Cog.listener()
@@ -24,13 +19,13 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
     # Command: Info
     @app_commands.command(name='info', description='Provide a list of information regarding B.O.B.')
     async def info(self, interaction: discord.Interaction):
-        creation_date = self.bot.user.created_at.strftime("%A, %B %d, %Y")
+        creation_timestamp = int(self.bot.user.created_at.timestamp())
         info_embed = discord.Embed(
             title='B.O.B Info',
             description='This bot was designed solely for moderation and utilities on the LoneStar Gaming Community Discord.',
             color=discord.Color.from_rgb(1, 162, 186))
-        info_embed.add_field(name='Created On:', value=f'{creation_date}')
-        info_embed.add_field(name='Author:', value='AgentLoneStar007')
+        info_embed.add_field(name='Created:', value=f'<t:{creation_timestamp}:R>')
+        info_embed.add_field(name='Author:', value='<@403735483961704450>')
         info_embed.add_field(name='Code:', value='[GitHub](https://github.com/AgentLoneStar007/BOB-AI-Moderator)')
         info_embed.add_field(name='Made In:', value='Python')
         info_embed.add_field(name='Using:', value='[Discord.py](https://github.com/Rapptz/discord.py)')
@@ -45,7 +40,7 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
         cog_name = cog_name.lower()
 
         # Check if the user is the owner
-        if not await self.checkIfOwner(interaction):
+        if not await checkIfOwner(interaction):
             return
 
         # Try to load the cog
@@ -56,6 +51,10 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
             log('info', f'Loaded the cog "{cog_name}" successfully.')
         # Throw an error if failed
         except commands.ExtensionError as e:
+            # Throw a specific error if the cog can't be found
+            if isinstance(e, discord.ext.commands.ExtensionNotFound):
+                return await interaction.response.send_message(f'The cog "{cog_name}" couldn\'t be found to be loaded.',
+                                                               ephemeral=True)
             await interaction.response.send_message(
                 f'An error occurred while unloading cog "{cog_name}": {e}', ephemeral=True)
             log('err', f'Failed to load cog "{cog_name}" with the following error: {e}')
@@ -66,7 +65,7 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
         cog_name = cog_name.lower()
 
         # Check if the user is the owner
-        if not await self.checkIfOwner(interaction):
+        if not await checkIfOwner(interaction):
             return
 
         # Prevent unloading of miscellaneous cog (with stupid formatting because PyCharm yells at me)
@@ -74,13 +73,16 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
             return await interaction.response.send_message('Cannot unload cog Miscellaneous, as because it contains cog'
                                                            ' loading utility commands. Restart the bot to apply changes'
                                                            ' to cog Miscellaneous.', ephemeral=True)
-
         # Try to unload cog
         try:
             await self.bot.unload_extension(f'cogs.{cog_name}')
             return await interaction.response.send_message(f'The cog "{cog_name}" was successfully unloaded.', ephemeral=True)
-        # Handle any errors that may occur
+        # Throw an error if failed
         except commands.ExtensionError as e:
+            # Throw a specific error if the cog hasn't been loaded
+            if isinstance(e, discord.ext.commands.ExtensionNotLoaded):
+                return await interaction.response.send_message(f'The cog "{cog_name}" has not been loaded.',
+                                                               ephemeral=True)
             return await interaction.response.send_message(f'An error occurred while unloading cog "{cog_name}": {e}')
 
     @app_commands.command(name='reload', description='Reload a cog. (Only usable by bot owner.)')
@@ -89,7 +91,7 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
         cog_name = cog_name.lower()
 
         # Check if the user is the owner
-        if not await self.checkIfOwner(interaction):
+        if not await checkIfOwner(interaction):
             return
 
         # Try to reload cog
@@ -97,15 +99,19 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
             await self.bot.reload_extension(f'cogs.{cog_name}')
             return await interaction.response.send_message(f'The cog "{cog_name.title()}" was successfully reloaded.',
                                                            ephemeral=True)
-        # Handle unload errors
+        # Throw an error if failed
         except commands.ExtensionError as e:
+            # Throw a specific error if the cog hasn't been loaded
+            if isinstance(e, discord.ext.commands.ExtensionNotLoaded):
+                return await interaction.response.send_message(f'The cog "{cog_name}" has not been loaded.',
+                                                               ephemeral=True)
             return await interaction.response.send_message(f'An error occurred while reloading cog "{cog_name}": {e}',
                                                            ephemeral=True)
 
     @app_commands.command(name='synccommands', description='Sync all app commands with Discord. (Only usable by bot owner.)')
     async def synccommands(self, interaction: discord.Interaction):
         # Check if the user is the owner
-        if not await self.checkIfOwner(interaction):
+        if not await checkIfOwner(interaction):
             return
 
         try:

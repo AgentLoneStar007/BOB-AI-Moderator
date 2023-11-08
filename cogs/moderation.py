@@ -103,7 +103,7 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
                 log('info', f'User {message.author} sent a message containing a blocked word or phrase.')
 
                 # Stop checking for blocked words after the first word is found
-                return
+                break
 
         # Make vars accessible without passing self
         user_message_counts_1 = self.user_message_counts_1
@@ -183,8 +183,6 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
         # Return if status is unchanged
         return
 
-    # TODO: Add more error handling and clearer error messages
-    # TODO: Add console output regarding unbans
     # Task: Check for users needing to be unbanned
     @tasks.loop(minutes=2.0)
     async def checkForNeededUnbans(self) -> None:
@@ -280,11 +278,8 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
             await interaction.response.send_message(f'User `{member.display_name}` was banned from the server.',
                                                     ephemeral=True)
             return log('info', message)
-        except discord.Forbidden:
-            await interaction.response.send_message('You don\'t have permission to use this command.', ephemeral=True)
-            return
         except discord.HTTPException as e:
-            await interaction.response.send_message(f'An error occurred: {e}', ephemeral=True)
+            await interaction.response.send_message(f'The following error occurred when trying to ban member {member.mention}: ```{e}```', ephemeral=True)
             return
 
     # Command: TempBan
@@ -323,9 +318,12 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
         with open('data/moderation/unban_times.json', 'w') as file:
             json.dump(existing_temp_bans, file, indent=2)
 
-        # TODO: Put in a try/except block
         # Ban the user
-        await member.ban(reason=reason)
+        try:
+            await member.ban(reason=reason)
+        except discord.HTTPException as e:
+            return await interaction.response.send_message(
+                f'The following error occurred when trying to temporarily ban member {member.mention}: ```{e}```', ephemeral=True)
 
         # Now log the temp ban in the #bot-output channel, and to file (probably more optimizing could be done here)
         await sendMessage(self.bot, self.bot_output_channel,
@@ -377,7 +375,7 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
         if 1 <= amount <= 100:
             logMessage = f'User {interaction.user} purged {amount} message(s) from channel "{interaction.channel}."'
             # Delete the specified number of messages (including the command message)
-            deleted = await interaction.channel.purge(limit=amount + 1)
+            deleted = await interaction.channel.purge(limit=amount)
             # Send a notifying message, then delete it after three seconds.
             if amount == 1:
                 # Make the message pretty if it's only one message to delete
@@ -388,9 +386,6 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
                 notifying_message = await interaction.response.send_message(
                     f'Deleted the last {len(deleted) - 1} messages.', ephemeral=True)
                 log('info', logMessage)
-            # Wait for three seconds, then delete the notification message
-            await asyncio.sleep(3)
-            await notifying_message.delete()
         else:
             # Log the attempted usage of the command
             logMessage = f'User {interaction.user} attempted to purge {amount} message(s) from channel "{interaction.channel}."'

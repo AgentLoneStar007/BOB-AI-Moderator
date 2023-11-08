@@ -6,7 +6,6 @@ from discord import app_commands
 from discord.ext import commands
 from pretty_help import PrettyHelp
 import wavelink
-from wavelink.ext import spotify
 from dotenv import load_dotenv
 import asyncio
 import os
@@ -85,7 +84,7 @@ async def run() -> None:
         # Handler for missing permissions
         if isinstance(error, app_commands.MissingPermissions):
             print(f'User {interaction.user} was unable to run command "{interaction.command.name}" due to insufficient permissions.')
-            return await interaction.response.send_message('You don\'t have permission to use this command.')
+            return await interaction.response.send_message('You don\'t have permission to use this command.', ephemeral=True)
         # So far no other handlers are required, because AppCommands automatically requires correct argument types
         #  and "CommandNotFound" errors are (to my knowledge) impossible with slash commands.
 
