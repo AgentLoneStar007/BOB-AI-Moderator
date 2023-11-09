@@ -11,7 +11,7 @@ import asyncio
 import os
 from utils.load_extensions import loadExtensions
 from utils.logger import log, logsInit
-from utils.intents import defIntents
+from utils.bot_utils import defIntents
 
 # Vars
 load_dotenv()
@@ -36,7 +36,7 @@ class Bot(commands.Bot):
             command_prefix='!', owner_id=OWNER_ID, intents=defIntents(), help_command=PrettyHelp(
                 color=discord.Color.from_rgb(1, 162, 186),
                 index_title='B.O.B Help Menu',
-                no_category='Miscellaneous Commands',
+                no_category='Not Categorized',
                 thumbnail_url='https://cdn.discordapp.com/avatars/1154825794963640390/ff31b0d57ab76713dba89da69a16fe35.webp?size=4096&width=913&height=913',
                 menu=pretty_help.AppMenu(ephemeral=True)
 
@@ -83,7 +83,7 @@ async def run() -> None:
     async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
         # Handler for missing permissions
         if isinstance(error, app_commands.MissingPermissions):
-            print(f'User {interaction.user} was unable to run command "{interaction.command.name}" due to insufficient permissions.')
+            print(f'User {interaction.user.display_name} was unable to run command "{interaction.command.name}" due to insufficient permissions.')
             return await interaction.response.send_message('You don\'t have permission to use this command.', ephemeral=True)
         # So far no other handlers are required, because AppCommands automatically requires correct argument types
         #  and "CommandNotFound" errors are (to my knowledge) impossible with slash commands.
@@ -91,11 +91,11 @@ async def run() -> None:
         # General error handler
         else:
             # Defining the error message as a variable for optimization
-            error_message = f'Error occurred while running command "{interaction.command.name}:" {error}'
-            print(error)
+            error_message = f'An error occurred when the user {interaction.user.display_name} tried to run the command {interaction.command.name}: "{type(error)}: {error}"'
+            print(error_message)
             await interaction.response.send_message(
                 f'An error occurred when trying to run that command:\n```{error}```', ephemeral=True)
-            return log('warn', error_message)
+            return log('error', error_message)
 
     # Load extensions and start bot, all in time with the bot itself
     async with bot:

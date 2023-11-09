@@ -2,7 +2,6 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-from datetime import datetime
 from utils.logger import logCommand, log
 from utils.bot_utils import checkIfOwner
 
@@ -108,7 +107,8 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
             return await interaction.response.send_message(f'An error occurred while reloading cog "{cog_name}": {e}',
                                                            ephemeral=True)
 
-    @app_commands.command(name='synccommands', description='Sync all app commands with Discord. (Only usable by bot owner.)')
+    @app_commands.command(name='synccommands',
+                          description='Sync all app commands with Discord. (Only usable by bot owner.)')
     async def synccommands(self, interaction: discord.Interaction):
         # Check if the user is the owner
         if not await checkIfOwner(interaction):

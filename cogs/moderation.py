@@ -12,9 +12,7 @@ from utils.logger import log, logCogLoad
 from utils.bot_utils import sendMessage
 
 
-# TODO: (RE-ENABLE BANNING IN TEMP-BAN COMMAND!!)
-
-def loadBlockedWords():
+def loadBlockedWords() -> list:
     with open('data/moderation/blocked_words.txt', 'r') as file:
         lines = file.readlines()
         # ha ha spaghetti code go brrrr
@@ -23,7 +21,7 @@ def loadBlockedWords():
     return blocked_words
 
 
-class Moderation(commands.Cog, description="Tools for moderators to use."):
+class Moderation(commands.GroupCog, description='Commands relating to moderation utilities.'):
     # Define vars
     blocked_words = loadBlockedWords()
     bot_output_channel = '1155842466482753656'
@@ -33,8 +31,9 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
     message_reset_interval = 30  # in seconds
     message_limit = 7  # message limit per reset interval
 
-    def __init__(self, bot):
+    def __init__(self, bot) -> None:
         self.bot = bot
+        super().__init__()
 
     # Listener: On Ready
     @commands.Cog.listener()
@@ -408,3 +407,4 @@ class Moderation(commands.Cog, description="Tools for moderators to use."):
 
 async def setup(bot):
     await bot.add_cog(Moderation(bot))
+

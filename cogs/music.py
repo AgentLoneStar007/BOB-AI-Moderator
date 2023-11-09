@@ -13,7 +13,7 @@ from utils.logger import logCommand, log
 
 
 # The following three functions were written by ChatGPT. I know; shut up.
-def convertDuration(milliseconds):
+def convertDuration(milliseconds) -> str:
     # Convert milliseconds to seconds
     seconds = milliseconds / 1000
 
@@ -188,16 +188,12 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         else:
             # If player is running, check if bot is in a different VC than user with music playing
             player: wavelink.Player = interaction.guild.voice_client
-            if player.is_playing() and user_vc.channel != interaction.guild.voice_client.channel:
+            if player.is_playing() or player.is_paused() and user_vc.channel != interaction.guild.voice_client.channel:
                 return await interaction.response.send_message('I am already playing music in another channel.', ephemeral=True)
 
             # Check if player is not playing music, and user is in different VC
             if not player.is_playing() and not player.is_paused() and user_vc.channel != interaction.guild.voice_client.channel:
-                print('amogus')
-                await interaction.guild.voice_client.disconnect(force=False)
-                print('disconnected')
-                player: wavelink.Player = await interaction.user.voice.channel.connect(cls=wavelink.Player)
-                print(player)
+                await player.move_to(user_vc.channel)
 
         tracks: list[wavelink.YouTubeTrack] = await wavelink.YouTubeTrack.search(query)
         if not tracks:
@@ -231,13 +227,8 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
         # Play track immediately if nothing else is playing
         else:
-            # TODO: Add system that moves the bot to another channel upon request if bot is already present
-            #  in a channel, but not playing music and not paused
-
             # Create the embed
-            print(player)
             await player.play(track)
-            print(f'playing track: {track}')
             embed = discord.Embed(
                 title=track.title,
                 url=track.uri,
