@@ -21,6 +21,8 @@ def loadBlockedWords() -> list:
     return blocked_words
 
 
+# TODO: Add cool-downs to commands to prevent spamming(which may or may not work)
+
 class Moderation(commands.GroupCog, description='Commands relating to moderation utilities.'):
     # Define vars
     blocked_words = loadBlockedWords()
@@ -405,6 +407,7 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
         return
 
 
+# Cog setup hook
 async def setup(bot):
     await bot.add_cog(Moderation(bot))
 

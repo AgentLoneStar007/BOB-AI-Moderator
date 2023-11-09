@@ -7,9 +7,8 @@ import datetime
 import re
 from utils.logger import logCommand, log
 
-# TODO: Add move command, only usable by admins, to move bot from one VC to another
 # TODO: Improve migration to Discord app commands with autocompletion and such
-# TODO: Group all player commands under a head command of "/player"
+# TODO: Add cool-downs to commands to prevent spamming(which may or may not work)
 
 
 # The following three functions were written by ChatGPT. I know; shut up.
@@ -99,12 +98,14 @@ async def runChecks(interaction: discord.Interaction, BotNotInVC=None, UserNotIn
 
 
 # Not defining a return value for this function because I think it would break
-async def checkPlayer(interaction: discord.Interaction):
+async def checkPlayer(interaction: discord.Interaction, custom_message: str = None):
     try:
         player: wavelink.Player = interaction.guild.voice_client
         return player
     except:
-        await interaction.response.send_message('No music player is currently running.', ephemeral=True)
+        if not custom_message:
+            custom_message: str = 'No music player is currently running.'
+        await interaction.response.send_message(custom_message, ephemeral=True)
         return None
 
 
@@ -241,7 +242,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             await interaction.response.send_message(embed=embed, ephemeral=True)
 
         # Log the usage of the command
-        logCommand(interaction.user, 'play')
+        return logCommand(interaction.user, interaction.command.name)
 
     # Command: Skip
     @app_commands.command(name='skip', description='Skips to the next song in queue. Stops the player if there are no songs left.')
@@ -267,8 +268,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         if player.is_paused():
             await player.resume()
         await interaction.response.send_message(f'Skipped track **{player.current.title}**.', ephemeral=True)
-        logCommand(interaction.user, 'skip')
-        return
+        return logCommand(interaction.user, interaction.command.name)
 
     # Command: Stop
     @app_commands.command(name='stop', description='Stops the music player and clears the queue.')
@@ -285,8 +285,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         await player.stop()
         player.queue.reset()
         await interaction.response.send_message('Stopped music playback.', ephemeral=True)
-        logCommand(interaction.user, 'stop')
-        return
+        return logCommand(interaction.user, interaction.command.name)
 
     # Command: Pause
     @app_commands.command(name='pause', description='Pauses the player.')
@@ -308,7 +307,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         # Pause the player
         await player.pause()
         await interaction.response.send_message('Playback paused.', ephemeral=True)
-        logCommand(interaction.user, 'pause')
+        return logCommand(interaction.user, interaction.command.name)
 
     # Command: Resume
     @app_commands.command(name='resume', description='Resumes the player, if paused.')
@@ -329,8 +328,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         # Resume the player
         await player.resume()
         await interaction.response.send_message('Playback resumed.', ephemeral=True)
-        logCommand(interaction.user, 'resume')
-        return
+        return logCommand(interaction.user, interaction.command.name)
 
     # Command: Volume
     @app_commands.command(name='volume', description='Adjusts the volume of the music player. Syntax: "/volume <volume>"')
@@ -350,8 +348,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             # Set volume
             await player.set_volume(volume)
             await interaction.response.send_message(f'Volume of player adjusted to `{volume}`.', ephemeral=True)
-            logCommand(interaction.user, 'volume')
-            return
+            return logCommand(interaction.user, interaction.command.name)
         else:
             # Send error message
             await interaction.response.send_message('Volume must be between one and 100.', ephemeral=True)
@@ -377,11 +374,11 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             await player.seek(0)
             await interaction.response.send_message('Restarted playback.', ephemeral=True)
             logCommand(interaction.user, 'rewind')
-            return
+            return logCommand(interaction.user, interaction.command.name)
         position_to_rewind_to = int(player.position - rewind_time)
         await player.seek(position_to_rewind_to)
         await interaction.response.send_message(f'Rewound player to position `{convertDuration(position_to_rewind_to)}`.', ephemeral=True)
-        return
+        return logCommand(interaction.user, interaction.command.name)
 
     # Command: FastForward
     @app_commands.command(name='fastforward', description='Fast-forwards the player by a number of seconds. Syntax: "/fastforward [seconds to fastforward]"')
@@ -411,7 +408,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         position_to_ff_to = int(player.position + ff_time)
         await player.seek(position_to_ff_to)
         await interaction.response.send_message(f'Fast-forwarded player to position `{convertDuration(position_to_ff_to)}`.', ephemeral=True)
-        return
+        return logCommand(interaction.user, interaction.command.name)
 
     # Command: Seek
     @app_commands.command(name='seek', description='Seek to a position in the currently playing track. Syntax: "/seek <position, in format (HH:)MM:SS>"')
@@ -446,7 +443,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
                 await interaction.response.send_message(f'Re-winded video to `{position}`.', ephemeral=True)
 
             # Log command usage
-            logCommand(interaction.user, 'seek')
+            return logCommand(interaction.user, interaction.command.name)
             return
 
         else:
@@ -491,11 +488,11 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
         # Log command usage
-        logCommand(interaction.user, 'playerinfo')
-        return
+        return logCommand(interaction.user, interaction.command.name)
 
     # TODO: Finish queue info command
-    @app_commands.command(name='queueinfo', description='Shows the current queue.')
+    # Command: QueueInfo
+    @app_commands.command(name='queueinfo', description='Shows the current track queue.')
     async def queueinfo(self, interaction: discord.Interaction) -> None:
         # Run checks
         if not await runChecks(interaction):
@@ -507,9 +504,40 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             return
 
         await interaction.response.send_message('This command is still a work-in-progress.', ephemeral=True)
-        return logCommand(interaction.user, 'queueinfo')
+        return logCommand(interaction.user, interaction.command.name)
+
+    # Command: Move
+    @app_commands.command(name='move', description='Move the bot from one VC to another. Only usable by administrators.')
+    @discord.app_commands.checks.has_permissions(move_members=True)
+    async def move(self, interaction: discord.Interaction) -> None:
+        # I'm not using the runChecks function here because the conditions are different
+        user_vc = interaction.user.voice
+        bot_vc = interaction.guild.voice_client
+
+        # Bot not connected to VC
+        if not bot_vc:
+            return await interaction.response.send_message('I am not connected to a voice channel.', ephemeral=True)
+
+        # User not connected to VC
+        if not user_vc:
+            return await interaction.response.send_message('You must be connected to a voice channel to use this command.',
+                                                           ephemeral=True)
+
+        if user_vc.channel == bot_vc.channel:
+            return await interaction.response.send_message('I\'m already in the same channel as you.', ephemeral=True)
+
+        # Try to get the player
+        player: wavelink.Player = await checkPlayer(interaction, 'No music player is currently running. Use the play '
+                                                                 'command to play music in your current voice chat.')
+        if not player:
+            return
+
+        await player.move_to(user_vc.channel)
+        await interaction.response.send_message(f'Moved to voice channel "{user_vc.channel.name}."', ephemeral=True)
+        return logCommand(interaction.user, interaction.command.name)
 
 
+# Cog setup hook
 async def setup(bot):
     await bot.add_cog(Music(bot))
 

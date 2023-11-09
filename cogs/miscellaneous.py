@@ -5,6 +5,8 @@ from discord.ext import commands
 from utils.logger import logCommand, log
 from utils.bot_utils import checkIfOwner
 
+# TODO: Add cool-downs to commands to prevent spamming(which may or may not work)
+
 
 class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
     def __init__(self, bot):
@@ -130,5 +132,6 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
             log('err', message)
 
 
+# Cog setup hook
 async def setup(bot):
     await bot.add_cog(Miscellaneous(bot))
