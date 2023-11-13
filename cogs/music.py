@@ -66,6 +66,8 @@ def timeToMilliseconds(time_str) -> int:
     return milliseconds
 
 
+# Function that runs basic checks for music-related commands
+# Checks if user is in VC, bot is in VC, player is running, etc.
 async def runChecks(interaction: discord.Interaction, BotNotInVC=None, UserNotInVCMsg=None, UserInDifferentVCMsg=None) -> bool:
     user_vc = interaction.user.voice
     bot_vc = interaction.guild.voice_client
@@ -196,50 +198,97 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             if not player.is_playing() and not player.is_paused() and user_vc.channel != interaction.guild.voice_client.channel:
                 await player.move_to(user_vc.channel)
 
-        tracks: list[wavelink.YouTubeTrack] = await wavelink.YouTubeTrack.search(query)
-        if not tracks:
-            return await interaction.response.send_message(f'I could\'nt find any songs with your query of "`{query}`."', ephemeral=True)
+        # TODO: Finish support for YouTube playlists (this system is kind of broken because BOB joins VC before he
+        #  sends notifying message about no support)
+        # If query is playlist URL
+        if 'https://' in query and 'list=' in query:
+            # Putting this here until I'm done
+            return await interaction.response.send_message('YouTube playlists aren\'t supported yet.', ephemeral=True)
 
-        # TODO: Add support for YouTube playlists
-        track: wavelink.YouTubeTrack = tracks[0]
-        # Add track to queue if a track is already playing
-        if player.is_playing():
-            # There's probably a more efficient way to go about the embeds, but I'll do it later
-            player.queue.put(item=track)
+            # Error handler in case BOB can't find any playlists matching URL
+            try:
+                playlist: wavelink.YouTubePlaylist = await wavelink.YouTubePlaylist.search(query)
+            except ValueError:
+                return await interaction.response.send_message('I couldn\'nt find any playlists matching that URL.', ephemeral=True)
 
-            # Get time left before song plays
-            time_left = player.current.duration - player.position
-            for x in player.queue:
-                time_left = time_left + x.duration
-            time_left = time_left - track.duration
+            print(playlist)
+            playlist_tracks: list[wavelink.YouTubeTrack] = playlist.tracks
+            if len(playlist_tracks) > 100:
+                notify_about_playlist_too_long = True
+            selected_track: int = playlist.selected_track
+            # If selected track is -1(no selected track), selected track is the first item in the playlist
+            selected_track = 0 if selected_track == -1 else selected_track
+            # If the selected item to the end of the playlist is less than or equal to 100, selection_end equals the
+            # end index of the playlist. Otherwise, it equals 100 + selected track. (The point is selection_end must be
+            # 100 more than selected_track or less, putting a limit of 100 tracks from a playlist.)
+            selection_end = 100 + selected_track if len(playlist_tracks) >= (100 + selected_track) else (len(playlist_tracks) - 1)
 
-            # Create the embed
-            embed = discord.Embed(
-                title=track.title,
-                url=track.uri,
-                description=f'Song added to queue for channel {player.channel}.',
-                color=discord.Color.from_rgb(1, 162, 186)
-            )
-            embed.add_field(name='Length:', value=convertDuration(track.duration))
-            embed.add_field(name='Author:', value=track.author)
-            embed.add_field(name='Time Before Track Plays:', value=convertDuration(time_left))
-            embed.set_image(url=track.thumb)
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            # Make the list only 100 items in length
+            playlist_tracks = playlist_tracks[selected_track:selection_end]
 
-        # Play track immediately if nothing else is playing
+            # If there's already a song playing:
+            if player.is_playing():
+                for track in playlist_tracks:
+                    player.queue.put(item=track)
+
+                # Get time left before the next track plays
+                time_left = player.current.duration - player.position
+                for x in player.queue:
+                    time_left = time_left + x.duration
+                time_left = time_left - track.duration
+
+
+
+
+
+
+        # Otherwise query is track or search query
         else:
-            # Create the embed
-            await player.play(track)
-            embed = discord.Embed(
-                title=track.title,
-                url=track.uri,
-                description=f'Now playing in {player.channel}.',
-                color=discord.Color.from_rgb(1, 162, 186)
-            )
-            embed.add_field(name='Length:', value=convertDuration(track.duration))
-            embed.add_field(name='Author:', value=track.author)
-            embed.set_image(url=track.thumb)
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            tracks: list[wavelink.YouTubeTrack] = await wavelink.YouTubeTrack.search(query)
+            print(tracks)
+            if not tracks:
+                return await interaction.response.send_message(f'I could\'nt find any songs with your query of "`{query}`."', ephemeral=True)
+
+            # The track to play will be the first result
+            track: wavelink.YouTubeTrack = tracks[0]
+            # Add track to queue if a track is already playing
+            if player.is_playing():
+                # There's probably a more efficient way to go about the embeds, but I'll do it later
+                player.queue.put(item=track)
+
+                # Get time left before track plays
+                time_left = player.current.duration - player.position
+                for x in player.queue:
+                    time_left = time_left + x.duration
+                time_left = time_left - track.duration
+
+                # Create the embed
+                embed = discord.Embed(
+                    title=track.title,
+                    url=track.uri,
+                    description=f'Song added to queue for channel {player.channel}.',
+                    color=discord.Color.from_rgb(1, 162, 186)
+                )
+                embed.add_field(name='Length:', value=convertDuration(track.duration))
+                embed.add_field(name='Author:', value=track.author)
+                embed.add_field(name='Time Before Track Plays:', value=convertDuration(time_left))
+                embed.set_image(url=track.thumb)
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+
+            # Play track immediately if nothing else is playing
+            else:
+                # Create the embed
+                await player.play(track)
+                embed = discord.Embed(
+                    title=track.title,
+                    url=track.uri,
+                    description=f'Now playing in {player.channel}.',
+                    color=discord.Color.from_rgb(1, 162, 186)
+                )
+                embed.add_field(name='Length:', value=convertDuration(track.duration))
+                embed.add_field(name='Author:', value=track.author)
+                embed.set_image(url=track.thumb)
+                await interaction.response.send_message(embed=embed, ephemeral=True)
 
         # Log the usage of the command
         return logCommand(interaction.user, interaction.command.name)

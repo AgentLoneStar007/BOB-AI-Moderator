@@ -20,6 +20,9 @@ OWNER_ID = int(os.getenv("BOT_OWNER_ID"))
 WAVELINK_PASSWORD = os.getenv("WAVELINK_PASSWORD")
 custom_status = 'Use "/help" for help.'
 
+# TODO: Add interactive console for bot
+# TODO(maybe): Put that console in a web dashboard
+
 
 class Bot(commands.Bot):
     # Init log system
