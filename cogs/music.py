@@ -191,7 +191,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         else:
             # If player is running, check if bot is in a different VC than user with music playing
             player: wavelink.Player = interaction.guild.voice_client
-            if player.is_playing() or player.is_paused() and user_vc.channel != interaction.guild.voice_client.channel:
+            if player.is_playing() and user_vc.channel != interaction.guild.voice_client.channel:
                 return await interaction.response.send_message('I am already playing music in another channel.', ephemeral=True)
 
             # Check if player is not playing music, and user is in different VC
@@ -203,7 +203,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         # If query is playlist URL
         if 'https://' in query and 'list=' in query:
             # Putting this here until I'm done
-            return await interaction.response.send_message('YouTube playlists aren\'t supported yet.', ephemeral=True)
+            #return await interaction.response.send_message('YouTube playlists aren\'t supported yet.', ephemeral=True)
 
             # Error handler in case BOB can't find any playlists matching URL
             try:
@@ -211,31 +211,85 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             except ValueError:
                 return await interaction.response.send_message('I couldn\'nt find any playlists matching that URL.', ephemeral=True)
 
-            print(playlist)
+            # Create list of tracks in playlist
             playlist_tracks: list[wavelink.YouTubeTrack] = playlist.tracks
+            notify_about_playlist_too_long = False
+
+            # If playlist is too long, update notify var
             if len(playlist_tracks) > 100:
                 notify_about_playlist_too_long = True
+
+            # Create selected track int
             selected_track: int = playlist.selected_track
             # If selected track is -1(no selected track), selected track is the first item in the playlist
             selected_track = 0 if selected_track == -1 else selected_track
             # If the selected item to the end of the playlist is less than or equal to 100, selection_end equals the
             # end index of the playlist. Otherwise, it equals 100 + selected track. (The point is selection_end must be
             # 100 more than selected_track or less, putting a limit of 100 tracks from a playlist.)
-            selection_end = 100 + selected_track if len(playlist_tracks) >= (100 + selected_track) else (len(playlist_tracks) - 1)
+            selection_end = 100 + selected_track if len(playlist_tracks) >= (100 + selected_track) else (len(playlist_tracks))
 
-            # Make the list only 100 items in length
+            # Make the list only 100 tracks in length
             playlist_tracks = playlist_tracks[selected_track:selection_end]
+
+            # Create the embed
+            embed = discord.Embed(
+                title=f'Playlist: {playlist.name}',
+                color=discord.Color.from_rgb(1, 162, 186)
+            )
+
+            # Add a few items in the playlist to the embed
+            limit = 5 if len(playlist_tracks) > 5 else len(playlist_tracks)
+            i: int = 0
+            while i < limit:
+                embed.add_field(name=f'Track {i + 1}:', value=f'[{playlist_tracks[i].title}]({playlist_tracks[i].uri})',
+                                inline=False)
+                i: int = i + 1
+
+            # If playlist is greater than five tracks, add footer
+            if len(playlist_tracks) > 5:
+                embed.set_footer(text=f'And {len(playlist_tracks) - 5} more tracks...')
 
             # If there's already a song playing:
             if player.is_playing():
+                # Add all items to queue
                 for track in playlist_tracks:
                     player.queue.put(item=track)
 
-                # Get time left before the next track plays
-                time_left = player.current.duration - player.position
-                for x in player.queue:
-                    time_left = time_left + x.duration
-                time_left = time_left - track.duration
+                # Set embed description var
+                embed_description = f'Added {len(playlist_tracks)} songs to queue in channel {player.channel}.'
+
+                # If playlist is too long, change description of embed to notify user
+                if notify_about_playlist_too_long:
+                    embed_description = embed_description + f' (Playlist size limit is 100 tracks.)'
+
+                # Set the description for the embed
+                embed.description = embed_description
+
+                # Send the embed
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+
+            else:
+                # Play the first track in the list
+                await player.play(playlist_tracks[0])
+
+                # Add all items to queue
+                for track in playlist_tracks[1:]:
+                    player.queue.put(item=track)
+
+                # Set embed description var
+                embed_description = f'Now playing [{playlist_tracks[0].title}]({playlist_tracks[0].uri}), and added {len(playlist_tracks) - 1} songs to queue in channel {player.channel}.'
+
+                # If playlist is too long, change description of embed to notify user
+                if notify_about_playlist_too_long:
+                    embed_description = embed_description + f' (Playlist size limit is 100 tracks.)'
+
+                # Set the description for the embed
+                embed.description = embed_description
+
+                # Send the embed
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
 
 
 
@@ -245,7 +299,6 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         # Otherwise query is track or search query
         else:
             tracks: list[wavelink.YouTubeTrack] = await wavelink.YouTubeTrack.search(query)
-            print(tracks)
             if not tracks:
                 return await interaction.response.send_message(f'I could\'nt find any songs with your query of "`{query}`."', ephemeral=True)
 
