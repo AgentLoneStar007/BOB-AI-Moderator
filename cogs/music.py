@@ -9,6 +9,8 @@ from utils.logger import logCommand, log
 
 # TODO: Improve migration to Discord app commands with autocompletion and such
 # TODO: Add cool-downs to commands to prevent spamming(which may or may not work)
+# TODO: Add command /loop to loop currently playing track
+# TODO: Create limit on queue size for player
 
 
 # The following three functions were written by ChatGPT. I know; shut up.
@@ -198,12 +200,9 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             if not player.is_playing() and not player.is_paused() and user_vc.channel != interaction.guild.voice_client.channel:
                 await player.move_to(user_vc.channel)
 
-        # TODO: Finish support for YouTube playlists (this system is kind of broken because BOB joins VC before he
-        #  sends notifying message about no support)
+        # TODO: Do more debugging on playlists support
         # If query is playlist URL
         if 'https://' in query and 'list=' in query:
-            # Putting this here until I'm done
-            #return await interaction.response.send_message('YouTube playlists aren\'t supported yet.', ephemeral=True)
 
             # Error handler in case BOB can't find any playlists matching URL
             try:
@@ -288,13 +287,6 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
                 # Send the embed
                 await interaction.response.send_message(embed=embed, ephemeral=True)
-
-
-
-
-
-
-
 
         # Otherwise query is track or search query
         else:
@@ -406,6 +398,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             # Don't log the command because it makes no difference
             await interaction.response.send_message('The player is already paused.', ephemeral=True)
             return
+
         # Pause the player
         await player.pause()
         await interaction.response.send_message('Playback paused.', ephemeral=True)
