@@ -24,6 +24,8 @@ def loadBlockedWords() -> list:
 # TODO: Add cool-downs to commands to prevent spamming(which may or may not work)
 # TODO: Add nuke prevention
 # TODO(maybe): Add server lock command
+# TODO: Add an AI-powered image detection system that can detect blocked words in an image and NSFW content
+# TODO: See if the above system can also work with videos
 
 class Moderation(commands.GroupCog, description='Commands relating to moderation utilities.'):
     # Define vars

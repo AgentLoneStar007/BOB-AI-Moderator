@@ -7,10 +7,13 @@ import datetime
 import re
 from utils.logger import logCommand, log
 
-# TODO: Improve migration to Discord app commands with autocompletion and such
 # TODO: Add cool-downs to commands to prevent spamming(which may or may not work)
-# TODO: Add command /loop to loop currently playing track
 # TODO: Create limit on queue size for player
+# TODO: Add auto-compression to prevent people from playing deafening tracks and blowing others' ears out (I think
+#  Wavelink has audio leveling systems I can use)
+# TODO: Add a command to go to specific song in queue
+# TODO: Add a queue shuffle command
+# TODO: Find a way to prevent people from playing videos with blocked words in the title
 
 
 # The following three functions were written by ChatGPT. I know; shut up.
@@ -111,6 +114,82 @@ async def checkPlayer(interaction: discord.Interaction, custom_message: str = No
             custom_message: str = 'No music player is currently running.'
         await interaction.response.send_message(custom_message, ephemeral=True)
         return None
+
+
+class QueueInfoUI(discord.ui.View):
+    # Vars
+    player: wavelink.Player
+    queue: list = []
+    nav_buttons_needed: bool = False
+    current_page: int = 0
+
+    # Class init function
+    def __init__(self, player: wavelink.Player):
+        # Run init function for parent class(discord.ui.View)
+        super().__init__()
+
+        # Vars
+        player_queue = player.queue
+        self.player = player
+
+        # Convert the player queue to another list with Discord-recognizable links with the names and URLs of the tracks
+        for x in player_queue:
+            self.queue.append(f'[{x.title}]({x.uri})')
+
+        # If the queue is shorter than 5 items, remove the navigation buttons
+        if len(self.queue) < 5:
+            self.remove_item(self.previous)
+            self.remove_item(self.next)
+        else:
+            self.current_page = 1
+
+    async def generateEmbed(self, interaction: discord.Interaction, direction: int):
+        # Set/update vars
+        queue = self.queue
+        current_page = self.current_page
+        embed_title: str = 'Queue'
+
+        # Change embed title if there are multiple pages
+        if current_page > 0:
+            embed_title = f'Queue - Page {current_page}'
+
+        # Create the embed
+        embed = discord.Embed(
+            title=embed_title,
+            description=f'There are currently {len(queue)} tracks in queue.',
+            color=discord.Color.from_rgb(1, 162, 186)
+        )
+
+        # Remove previous button if on first(or only) page
+        if current_page <= 1:
+            self.remove_item(self.previous)
+            embed.add_field(name='Current Track:', value=f'[{self.player.current.title}]({self.player.current.uri})')
+
+        # Add a few items in the playlist to the embed
+        i: int = 0
+        while i < 5:
+            embed.add_field(name=f'Track {i + 1}:', value=queue[i], inline=False)
+            i = i + 1
+
+            # If the current count is greater than queue length
+            if i + 1 >= len(queue):
+                break
+
+        # Send the embed by updating the original message
+        await interaction.response.edit_message(embed=embed)
+
+    @discord.ui.button(label='Previous', style=discord.ButtonStyle.primary)
+    async def previous(self, interaction: discord.Interaction, button: discord.Button):
+        await self.generateEmbed(interaction, 0)
+
+        #embed = discord.Embed(title='Previous Embed', description='ipsum dolor')
+        #await interaction.response.edit_message(embed=embed)
+
+    @discord.ui.button(label='Next', style=discord.ButtonStyle.secondary)
+    async def next(self, interaction: discord.Interaction, button: discord.Button):
+        await self.generateEmbed(interaction, 1)
+        #embed = discord.Embed(title='Next Embed', description='ipsum dolor')
+        #await interaction.response.edit_message(embed=embed)
 
 
 class Music(commands.Cog, description="Commands relating to the voice chat music player."):
@@ -391,7 +470,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         await player.seek(player.current.duration * 1000)
         if player.is_paused():
             await player.resume()
-        await interaction.response.send_message(f'Skipped track **{player.current.title}**.', ephemeral=True)
+        await interaction.response.send_message(f'Skipped track **"{player.current.title}."**', ephemeral=True)
 
     # Command: Stop
     @app_commands.command(name='stop', description='Stops the music player and clears the queue.')
@@ -640,8 +719,8 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
         # Create the info embed
         embed = discord.Embed(
-            title='Current Player Info',
-            description=f'Information on the currently playing track.',
+            title=f'Current Track:',
+            description=f'**{player.current.title}**',
             color=discord.Color.from_rgb(1, 162, 186),
         )
         embed.add_field(name='Track Length:', value=convertDuration(player.current.duration))
@@ -662,15 +741,25 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
     @app_commands.command(name='queueinfo', description='Shows the current track queue.')
     async def queueinfo(self, interaction: discord.Interaction) -> None:
         # Run checks
-        if not await runChecks(interaction):
-            return
+        #if not await runChecks(interaction):
+        #    return
 
         # Check if player is running
         player: wavelink.Player = await checkPlayer(interaction)
         if not player:
             return
 
-        await interaction.response.send_message('This command is still a work-in-progress.', ephemeral=True)
+        if len(player.queue) < 1:
+            return await interaction.response.send_message('The queue is currently empty.', ephemeral=True)
+
+        view = QueueInfoUI(player=player)
+        await interaction.response.send_message(view=view)
+
+
+
+
+
+        #await interaction.response.send_message('This command is still a work-in-progress.', ephemeral=True)
         return logCommand(interaction.user, interaction.command.name)
 
     # Command: Move
