@@ -117,6 +117,10 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
     def __init__(self, bot) -> None:
         self.bot = bot
 
+    # Vars
+    loop_track: bool = False
+    current_track: wavelink.YouTubeTrack = None
+
     # Listener: On Ready
     @commands.Cog.listener()
     async def on_ready(self):
@@ -169,10 +173,18 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
     # Listener: On Track End
     @commands.Cog.listener()
     async def on_wavelink_track_end(self, payload: wavelink.TrackEventPayload) -> None:
-        # Go to the next song in the queue on track end if queue isn't empty
+        # Create player object
         player: wavelink.Player = payload.player
+
+        # Loop current track if loop is enabled
+        if self.loop_track:
+            await player.play(self.current_track)
+            return
+
+        # Go to the next song in the queue on track end if queue isn't empty
         if not player.queue.is_empty:
             next_track = player.queue.get()
+            self.current_track = next_track
             await player.play(next_track)
         return
 
@@ -271,6 +283,9 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
                 # Play the first track in the list
                 await player.play(playlist_tracks[0])
 
+                # Update the current_track var with the now playing track
+                self.current_track = playlist_tracks[0]
+
                 # Add all items to queue
                 for track in playlist_tracks[1:]:
                     player.queue.put(item=track)
@@ -322,8 +337,13 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
             # Play track immediately if nothing else is playing
             else:
-                # Create the embed
+                # Play the track
                 await player.play(track)
+
+                # Update the current_track var
+                self.current_track = track
+
+                # Create the embed
                 embed = discord.Embed(
                     title=track.title,
                     url=track.uri,
@@ -349,20 +369,29 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         if not player:
             return
 
+        # Disable looping, if enabled
+        if self.loop_track:
+            self.loop_track = False
+
         # Stop playback if queue is empty
         if player.queue.is_empty:
+            # Stop playback
             await player.stop()
-            # Log the command
-            logCommand(interaction.user, 'skip')
+
+            # Remove current playing track var (for loop command)
+            self.current_track = None
+
+            # Respond to command
             await interaction.response.send_message('Playback was stopped because there are no remaining songs in the queue.', ephemeral=True)
-            return
+
+            # Log the command
+            return logCommand(interaction.user, interaction.command.name)
 
         # Skip current song in queue
         await player.seek(player.current.duration * 1000)
         if player.is_paused():
             await player.resume()
         await interaction.response.send_message(f'Skipped track **{player.current.title}**.', ephemeral=True)
-        return logCommand(interaction.user, interaction.command.name)
 
     # Command: Stop
     @app_commands.command(name='stop', description='Stops the music player and clears the queue.')
@@ -375,9 +404,20 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         player: wavelink.Player = await checkPlayer(interaction)
         if not player:
             return
-        # Stop playback.
+
+        # Disable looping, if enabled
+        if self.loop_track:
+            self.loop_track = False
+
+        # Stop playback
         await player.stop()
+
+        # Empty queue
         player.queue.reset()
+
+        # Remove current playing track var (for loop command)
+        self.current_track = None
+
         await interaction.response.send_message('Stopped music playback.', ephemeral=True)
         return logCommand(interaction.user, interaction.command.name)
 
@@ -539,12 +579,38 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
             # Log command usage
             return logCommand(interaction.user, interaction.command.name)
-            return
 
         else:
             await interaction.response.send_message('Invalid position to seek to. Check command help page with '
                            '"/help seek" for more information.', ephemeral=True)
             return
+
+    # Command: Loop
+    @app_commands.command(name='loop', description='Loops the currently playing track.')
+    async def loop(self, interaction: discord.Interaction):
+        # Run checks
+        if not await runChecks(interaction):
+            return
+
+        # Check if player is running
+        player: wavelink.Player = await checkPlayer(interaction)
+        if not player:
+            return
+
+        # Check if player is running
+        if not player.current:
+            return await interaction.response.send_message('No track is currently playing.', ephemeral=True)
+
+        # Toggle track loop
+        if not self.loop_track:
+            self.loop_track = True
+            await interaction.response.send_message('Enabled looping of current track.', ephemeral=True)
+        else:
+            self.loop_track = False
+            await interaction.response.send_message('Disabled looping of current track.', ephemeral=True)
+
+        # Log the command usage
+        return logCommand(interaction.user, interaction.command.name)
 
     # Command: PlayerInfo
     @app_commands.command(name='playerinfo', description='Shows information regarding the current track and queue.')
@@ -560,12 +626,17 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
         # Check if player is running
         if not player.current:
-            await interaction.response.send_message('No track is currently playing, and the queue is empty.', ephemeral=True)
-            return
+            return await interaction.response.send_message('No track is currently playing, and the queue is empty.', ephemeral=True)
 
         # Create vars
         video_id = player.current.uri.replace('https://www.youtube.com/watch?v=', '')
         thumbnail_url = f'https://img.youtube.com/vi/{video_id}/maxresdefault.jpg'
+
+        # Get loop status
+        if self.loop_track:
+            is_looping = 'Enabled'
+        else:
+            is_looping = 'Disabled'
 
         # Create the info embed
         embed = discord.Embed(
@@ -573,12 +644,13 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             description=f'Information on the currently playing track.',
             color=discord.Color.from_rgb(1, 162, 186),
         )
-        embed.add_field(name='Current Track Length:', value=convertDuration(player.current.duration))
-        embed.add_field(name='Current Track Position:', value=convertDuration(player.position))
+        embed.add_field(name='Track Length:', value=convertDuration(player.current.duration))
+        embed.add_field(name='Track Position:', value=convertDuration(player.position))
         embed.add_field(name='Author:', value=player.current.author)
-        embed.add_field(name='URL:', value=player.current.uri)
+        embed.add_field(name='URL:', value=player.current.uri, inline=False)
         embed.add_field(name='Current Queue Length:', value=len(player.queue))
-        embed.add_field(name='Volume', value=player.volume)
+        embed.add_field(name='Volume:', value=player.volume)
+        embed.add_field(name='Looping:', value=is_looping)
         embed.set_image(url=thumbnail_url)
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
