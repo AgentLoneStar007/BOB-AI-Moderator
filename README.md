@@ -8,19 +8,25 @@ If you wish to fork this bot and make it your own, you *must* credit me(AgentLon
 original creator. And please note: this bot is designed for use in one Discord server. It will
 probably break if used on more than one. And it's also not designed to be user-friendly for someone
 making their own bot, and it most likely never will. You'll have to read through the code and modify
-it to make this bot your own.
+it to make this bot your own. Finally, I push commits as needed for this bot, meaning that it's very
+likely that sometimes, BOB will have unfinished features/commands in his code.
 
 ### Current Features:
 - [ ] Moderation
   - [x] Basic Auto-Mod Systems
   - [x] Basic Moderation Tools
   - [ ] Advanced Auto-Mod Systems
-  - [ ] AI-Powered Contextually-Aware Auto-Mod System
+    - [ ] On-Demand/Automatic File Scanning and Video Scanning 
+  - [ ] AI-Powered Auto-Mod Systems
+    - [ ] AI-Powered Image Scanning System
+    - [ ] AI-Powered Contextually-Aware Auto-Mod System
 - [ ] Music Player
   - [x] Basic Music Player
   - [x] Queues
   - [x] YouTube Support
-  - [ ] YouTube Playlist Support
-  - [ ] Spotify Support
-  - [ ] Spotify Playlist Support (if that's a thing)
-- [ ] Voice-Activated Commands
+  - [x] YouTube Playlist Support
+  - [ ] More Player Control/Info Commands
+    - [ ] Shuffle Command
+    - [ ] Queue Info Command
+- [ ] Funny Stuff
+  - [ ] Idk I'll think of funny stuff to add later 

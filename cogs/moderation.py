@@ -26,6 +26,7 @@ def loadBlockedWords() -> list:
 # TODO(maybe): Add server lock command
 # TODO: Add an AI-powered image detection system that can detect blocked words in an image and NSFW content
 # TODO: See if the above system can also work with videos
+# TODO: Add on-demand(or maybe automatic) file scanning via the VirusTotal API
 
 class Moderation(commands.GroupCog, description='Commands relating to moderation utilities.'):
     # Define vars
