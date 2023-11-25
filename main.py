@@ -1,5 +1,9 @@
+## BOB-AI-Moderator
+## A Discord bot made in Python using Discord.py, by AgentLoneStar007
+## https://github.com/AgentLoneStar007
+
+
 # Imports
-# from bot.core import bot, botSetup
 import discord
 import pretty_help
 from discord import app_commands
@@ -67,13 +71,13 @@ Custom Status: "{custom_status}"
         await wavelink.NodePool.connect(client=self, nodes=[node])
 
     # Add a handler for anyone trying to use old command system
-    async def on_command_error(self, ctx, error):
+    async def on_command_error(self, ctx, error) -> None:
         message = ('I no longer support regular bot commands. Instead, I use Discord\'s built-in app commands! Use '
                    '`/help` for a list of available commands.')
         if isinstance(error, commands.CommandNotFound):
-            await ctx.send(message, ephemeral=True)
+            return await ctx.send(message, ephemeral=True)
         else:
-            await ctx.send(message, ephemeral=True)
+            return await ctx.send(message, ephemeral=True)
 
 
 async def run() -> None:
@@ -88,6 +92,12 @@ async def run() -> None:
         if isinstance(error, app_commands.MissingPermissions):
             print(f'User {interaction.user.display_name} was unable to run command "{interaction.command.name}" due to insufficient permissions.')
             return await interaction.response.send_message('You don\'t have permission to use this command.', ephemeral=True)
+
+        # Handler for failing to respond to an interaction quickly enough
+        if isinstance(error, discord.app_commands.CommandInvokeError):
+            return print(f'Failed to respond to command "{interaction.command.name}" run by'
+                         f'{interaction.user.display_name} because the interaction timed out.')
+
         # So far no other handlers are required, because AppCommands automatically requires correct argument types
         #  and "CommandNotFound" errors are (to my knowledge) impossible with slash commands.
 

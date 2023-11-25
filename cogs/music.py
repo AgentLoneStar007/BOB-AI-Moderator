@@ -125,6 +125,8 @@ class QueueInfoUI(discord.ui.View):
     current_page: int
     current_position: int
 
+    # TODO: Fix this class because the init function can't be async but the class needs to be asynchronous
+
     # Class init function
     def __init__(self, player: wavelink.Player, interaction: discord.Interaction):
         # Run init function for parent class(discord.ui.View)
@@ -168,6 +170,8 @@ class QueueInfoUI(discord.ui.View):
             if self.current_position >= len(self.queue):
                 break
         self.current_page += 1
+
+        self.updateMessage(interaction, embed)
 
     # Update message
     async def updateMessage(self, interaction: discord.Interaction, embed: discord.Embed):
@@ -340,7 +344,6 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
             # Check if player is not playing music, and user is in different VC
             if not player.is_playing() and not player.is_paused() and user_vc.channel != interaction.guild.voice_client.channel:
-                print('amogus')
                 await player.move_to(user_vc.channel)
 
         # TODO: Do more debugging on playlists support
@@ -401,7 +404,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
                 # If playlist is too long, change description of embed to notify user
                 if notify_about_playlist_too_long:
-                    embed_description = embed_description + f' (Playlist size limit is 100 tracks.)'
+                    embed_description = embed_description + ' (Playlist size limit is 100 tracks.)'
 
                 # Set the description for the embed
                 embed.description = embed_description

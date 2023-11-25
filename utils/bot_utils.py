@@ -7,6 +7,7 @@ import os
 load_dotenv()
 OWNER_ID = int(os.getenv("BOT_OWNER_ID"))
 
+# TODO: Add returns on functions in these miscellaneous function files
 
 # Define intents the bot needs
 def defIntents() -> discord.Intents:

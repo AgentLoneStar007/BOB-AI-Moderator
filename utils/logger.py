@@ -1,10 +1,8 @@
-## Logging system by AgentLoneStar007
-## https://github.com/AgentLoneStar007
-
 # Imports
 from datetime import datetime
 import os
 
+# TODO: Add returns on functions in these miscellaneous function files
 
 # Vars
 logFolder = 'logs'
