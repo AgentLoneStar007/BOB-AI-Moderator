@@ -121,7 +121,7 @@ class QueueInfoUI(discord.ui.View):
     player: wavelink.Player
     queue: list
     nav_buttons_needed: bool
-    embed_title: str = 'Queue'
+    embed_title: str = 'Queue - Page 1'
     current_page: int
     current_position: int
 
@@ -148,15 +148,30 @@ class QueueInfoUI(discord.ui.View):
         if len(self.queue) <= 5:
             self.remove_item(self.previous)
             self.remove_item(self.next)
+            self.embed_title = 'Queue'
         else:
             self.current_page = 1
 
         # Create the embed
         embed = discord.Embed(
-            title=embed_title,
-            description=f'There are currently {len(queue)} tracks in queue.',
+            title=self.embed_title,
+            description=f'There are currently {len(self.queue)} tracks in queue.',
             color=discord.Color.from_rgb(1, 162, 186)
         )
+
+        while self.current_position < 5:
+            embed.add_field(name=f'Track {self.current_position + 1}:', value=self.queue[self.current_position],
+                            inline=False)
+            self.current_position += 1
+
+            # If the current count is greater than queue length
+            if self.current_position >= len(self.queue):
+                break
+        self.current_page += 1
+
+    # Update message
+    async def updateMessage(self, interaction: discord.Interaction, embed: discord.Embed):
+        await interaction.response.edit_message('', embed=embed)
 
     async def generateEmbed(self, interaction: discord.Interaction, direction: int = 1, page: int = 0):
         # Set/update vars
@@ -325,12 +340,12 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
             # Check if player is not playing music, and user is in different VC
             if not player.is_playing() and not player.is_paused() and user_vc.channel != interaction.guild.voice_client.channel:
+                print('amogus')
                 await player.move_to(user_vc.channel)
 
         # TODO: Do more debugging on playlists support
         # If query is playlist URL
-        if 'https://' in query and 'list=' in query:
-
+        if 'https://' and 'list=' in query:
             # Error handler in case BOB can't find any playlists matching URL
             try:
                 playlist: wavelink.YouTubePlaylist = await wavelink.YouTubePlaylist.search(query)
@@ -376,7 +391,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
                 embed.set_footer(text=f'And {len(playlist_tracks) - 5} more tracks...')
 
             # If there's already a song playing:
-            if player.is_playing():
+            if player.is_playing() or player.is_paused():
                 # Add all items to queue
                 for track in playlist_tracks:
                     player.queue.put(item=track)
@@ -427,7 +442,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             # The track to play will be the first result
             track: wavelink.YouTubeTrack = tracks[0]
             # Add track to queue if a track is already playing
-            if player.is_playing():
+            if player.is_playing() or player.is_paused():
                 # There's probably a more efficient way to go about the embeds, but I'll do it later
                 player.queue.put(item=track)
 
