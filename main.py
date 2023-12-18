@@ -26,6 +26,8 @@ custom_status = 'Use "/help" for help.'
 
 # TODO: Add interactive console for bot
 # TODO(maybe): Put that console in a web dashboard
+# TODO: Add a system where a user can leave a question or comment for a moderator to read(with spam prevention)
+# TODO: Rework the log system because having to pass a string as an argument for the type of log is stupid as crap
 
 
 class Bot(commands.Bot):
@@ -90,13 +92,19 @@ async def run() -> None:
     async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
         # Handler for missing permissions
         if isinstance(error, app_commands.MissingPermissions):
-            print(f'User {interaction.user.display_name} was unable to run command "{interaction.command.name}" due to insufficient permissions.')
+            print(f'User {interaction.user.name} was unable to run command "{interaction.command.name}" due to insufficient permissions.')
             return await interaction.response.send_message('You don\'t have permission to use this command.', ephemeral=True)
 
+        if isinstance(error, app_commands.CommandOnCooldown):
+            print(f'User {interaction.user.name} was unable to run command "{interaction.command.name}" because it\'s'
+                  'on cooldown.')
+            return await interaction.response.send_message('This command is on cooldown!', ephemeral=True)
+
+        # TODO: Find out why I commented this out
         # Handler for failing to respond to an interaction quickly enough
-        if isinstance(error, discord.app_commands.CommandInvokeError):
-            return print(f'Failed to respond to command "{interaction.command.name}" run by'
-                         f'{interaction.user.display_name} because the interaction timed out.')
+        #if isinstance(error, discord.app_commands.CommandInvokeError):
+        #    return print(f'Failed to respond to command "{interaction.command.name}" run by'
+        #                 f'{interaction.user.display_name} because the interaction timed out.')
 
         # So far no other handlers are required, because AppCommands automatically requires correct argument types
         #  and "CommandNotFound" errors are (to my knowledge) impossible with slash commands.

@@ -1,7 +1,9 @@
-# TODO! Update example cog with app commands
-
-# Imports
+# Basic libraries that will probably be needed
+import discord
+from discord import app_commands
 from discord.ext import commands
+from utils.logger import logCommand, log
+from utils.bot_utils import checkIfOwner
 
 
 # Example cog class
@@ -15,22 +17,10 @@ class ExampleCog(commands.Cog, description="Example cog description."):
         print(f'Extension loaded: {self.__class__.__name__}')
 
     # Example command
-    @commands.command(help='This is an example for a command description.')
-    async def example(self, ctx):
-        await ctx.send("This is an example cog!")
-
-    # Example slash/Discord interaction command
-    @app_commands.command(name="example", description="Responds with a message.")
-    async def ping(self, interaction: discord.Interaction):
-        await interaction.response.send_message('Example command!', ephemeral=True)
-
-    @commands.command(help="Sync Discord interaction commands.")
-    async def sync(self, ctx) -> None:
-        fmt = await ctx.bot.tree.sync()
-        await ctx.send(f'Synced {len(fmt)} commands.')
-        return
+    @app_commands.command(name='example', description='This is an example for a command description.')
+    async def example(self, interaction: discord.Interaction):
+        await interaction.response.send_message("This is an example cog!", ephemeral=True)
 
 
 async def setup(bot):
     await bot.add_cog(ExampleCog(bot))
-

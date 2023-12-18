@@ -23,10 +23,11 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
         creation_timestamp = int(self.bot.user.created_at.timestamp())
         info_embed = discord.Embed(
             title='B.O.B Info',
-            description='This bot was designed solely for moderation and utilities on the LoneStar Gaming Community Discord.',
+            description='**B.O.B**: Basic Operations and Bouncer.\n\nThis bot was designed solely for moderation and '
+                        'server management utilities on the LoneStar Gaming Community Discord.',
             color=discord.Color.from_rgb(1, 162, 186))
-        info_embed.add_field(name='Created:', value=f'<t:{creation_timestamp}:R>')
-        info_embed.add_field(name='Author:', value='<@403735483961704450>')
+        info_embed.add_field(name='Created:', value=f'<t:{creation_timestamp}:R>', inline=False)
+        info_embed.add_field(name='Author:', value='<@403735483961704450>', inline=False)
         info_embed.add_field(name='Code:', value='[GitHub](https://github.com/AgentLoneStar007/BOB-AI-Moderator)')
         info_embed.add_field(name='Made In:', value='Python')
         info_embed.add_field(name='Using:', value='[Discord.py](https://github.com/Rapptz/discord.py)')
@@ -34,6 +35,7 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
         await interaction.response.send_message(embed=info_embed, ephemeral=True)
         logCommand(interaction.user, 'info', interaction.channel)
 
+    # Command: Load
     @app_commands.command(name='load', description='Load a cog. (Only usable by bot owner.)')
     @app_commands.describe(cog_name='The name of the cog to load.')
     async def load(self, interaction: discord.Interaction, cog_name: str):
@@ -60,6 +62,7 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
                 f'An error occurred while unloading cog "{cog_name}": {e}', ephemeral=True)
             log('err', f'Failed to load cog "{cog_name}" with the following error: {e}')
 
+    # Command: Unload
     @app_commands.command(name='unload', description='Unload a cog. (Only usable by bot owner.)')
     @app_commands.describe(cog_name='The name of the cog to unload.')
     async def unload(self, interaction: discord.Interaction, cog_name: str):
@@ -86,6 +89,7 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
                                                                ephemeral=True)
             return await interaction.response.send_message(f'An error occurred while unloading cog "{cog_name}": {e}')
 
+    # Command: Reload
     @app_commands.command(name='reload', description='Reload a cog. (Only usable by bot owner.)')
     @app_commands.describe(cog_name='The name of the cog to reload.')
     async def reload(self, interaction: discord.Interaction, cog_name: str):
@@ -109,6 +113,7 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
             return await interaction.response.send_message(f'An error occurred while reloading cog "{cog_name}": {e}',
                                                            ephemeral=True)
 
+    # Command: Sync Commands
     @app_commands.command(name='synccommands',
                           description='Sync all app commands with Discord. (Only usable by bot owner.)')
     async def synccommands(self, interaction: discord.Interaction):

@@ -1,4 +1,6 @@
 # Imports
+import asyncio
+
 import discord
 from discord import app_commands
 from discord.ext import commands, tasks
@@ -154,6 +156,14 @@ class QueueInfoUI(discord.ui.View):
         else:
             self.current_page = 1
 
+    # Update message
+    async def updateMessage(self, interaction: discord.Interaction, embed: discord.Embed):
+        ...
+        #await interaction.response.
+
+    async def generateFirstEmbed(self, interaction: discord.Interaction):
+        print(interaction.id)
+
         # Create the embed
         embed = discord.Embed(
             title=self.embed_title,
@@ -171,11 +181,7 @@ class QueueInfoUI(discord.ui.View):
                 break
         self.current_page += 1
 
-        self.updateMessage(interaction, embed)
-
-    # Update message
-    async def updateMessage(self, interaction: discord.Interaction, embed: discord.Embed):
-        await interaction.response.edit_message('', embed=embed)
+        await self.updateMessage(interaction, embed)
 
     async def generateEmbed(self, interaction: discord.Interaction, direction: int = 1, page: int = 0):
         # Set/update vars
@@ -807,7 +813,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             return await interaction.response.send_message('The queue is currently empty.', ephemeral=True)
 
         view = QueueInfoUI(player=player, interaction=interaction)
-        #embed = await view.generateEmbed(interaction=interaction, page=1)
+        await view.generateFirstEmbed(interaction=interaction)
         await interaction.response.send_message('Generating queue list...', view=view)
 
 
