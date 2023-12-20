@@ -8,19 +8,20 @@ from utils.bot_utils import checkIfOwner
 
 # Example cog class
 class ExampleCog(commands.Cog, description="Example cog description."):
-    def __init__(self, bot):
+    def __init__(self, bot) -> None:
         self.bot = bot
+        return
 
     # Example listener
     @commands.Cog.listener()
-    async def on_ready(self):
-        print(f'Extension loaded: {self.__class__.__name__}')
+    async def on_ready(self) -> None:
+        return print(f'Extension loaded: {self.__class__.__name__}')
 
     # Example command
     @app_commands.command(name='example', description='This is an example for a command description.')
-    async def example(self, interaction: discord.Interaction):
-        await interaction.response.send_message("This is an example cog!", ephemeral=True)
+    async def example(self, interaction: discord.Interaction) -> None:
+        return await interaction.response.send_message("This is an example cog!", ephemeral=True)
 
 
-async def setup(bot):
-    await bot.add_cog(ExampleCog(bot))
+async def setup(bot) -> None:
+    return await bot.add_cog(ExampleCog(bot))

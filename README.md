@@ -28,5 +28,10 @@ likely that sometimes, BOB will have unfinished features/commands in his code.
   - [ ] More Player Control/Info Commands
     - [ ] Shuffle Command
     - [ ] Queue Info Command
+    - [ ] Bulk Queue Item Removal Command
+- [ ] Member Utilities
+  - [x] Question Command
+  - [ ] Feedback Command
+  - [ ] More stuff I'll think of later
 - [ ] Funny Stuff
   - [ ] Idk I'll think of funny stuff to add later 

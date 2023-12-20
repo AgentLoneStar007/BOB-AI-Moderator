@@ -1,9 +1,8 @@
-# Basic libraries that will probably be needed
+# Imports
 import discord
 from discord import app_commands
 from discord.ext import commands
 from utils.logger import logCommand, log
-from utils.bot_utils import checkIfOwner
 from dotenv import load_dotenv
 import os
 
@@ -42,20 +41,24 @@ class QuestionModal(discord.ui.Modal, title='Question for Staff'):
         await channel.send(embed=embed)
         await interaction.response.send_message(f'Your question was submitted, {self.user.mention}, and a response will '
                                                 'be issued shortly.', ephemeral=True)
+        return logCommand('info', f'User {interaction.user.name} submitted a question to staff.')
 
     # This function will be run if there's an error
     async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
-        ...
+        await interaction.response.send_message('The following error occurred when trying to submit your form: '
+                                                 f'{error}', ephemeral=True)
+        return log('info', f'An error occurred when user {interaction.user.name} tried to submit a question.')
 
 
 class MemberUtils(commands.Cog, description="Utilities for server members."):
-    def __init__(self, bot):
+    def __init__(self, bot) -> None:
         self.bot = bot
+        return
 
     # Listener: On Ready
     @commands.Cog.listener()
-    async def on_ready(self):
-        print(f'Extension loaded: {self.__class__.__name__}')
+    async def on_ready(self) -> None:
+        return print(f'Extension loaded: {self.__class__.__name__}')
 
     # Command: Question
     @app_commands.command(name='question', description='Leave a question for the server staff to answer.')
@@ -64,12 +67,13 @@ class MemberUtils(commands.Cog, description="Utilities for server members."):
     # guild-specific, and not bot-wide, if the bot is on multiple servers. This is unnecessary for this bot because
     # he'll probably only ever be on one server, but it's good practice.
     @app_commands.checks.cooldown(1, 300.0, key=lambda i: (i.guild_id, i.user.id))
-    async def question(self, interaction: discord.Interaction):
+    async def question(self, interaction: discord.Interaction) -> None:
         question_modal: discord.ui.Modal = QuestionModal()
         question_modal.user = interaction.user
         await interaction.response.send_modal(question_modal)
+        return log('info', '')
 
 
-async def setup(bot):
-    await bot.add_cog(MemberUtils(bot))
+async def setup(bot) -> None:
+    return await bot.add_cog(MemberUtils(bot))
 
