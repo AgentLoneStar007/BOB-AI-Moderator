@@ -29,6 +29,7 @@ custom_status = 'Use "/help" for help.'
 # TODO: Add a system where a user can leave a question or comment for a moderator to read(with spam prevention)
 # TODO: Rework the log system because having to pass a string as an argument for the type of log is stupid as crap
 # TODO: Add an update system for BOB
+# TODO: Add a system to scan even text files for bad content
 
 
 class Bot(commands.Bot):
