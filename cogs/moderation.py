@@ -48,8 +48,7 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
         print(f'Extension loaded: {self.__class__.__name__}')
         logCogLoad(self.__class__.__name__)
         self.checkForNeededUnbans.start()
-        print('Started background task "Check for Needed Unbans."')
-        return
+        return print('Started background task "Check for Needed Unbans."')
 
     # TODO: Add returns in this function
     # Create functions

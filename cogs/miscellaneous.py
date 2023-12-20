@@ -56,7 +56,8 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
         except commands.ExtensionError as e:
             # Throw a specific error if the cog can't be found
             if isinstance(e, discord.ext.commands.ExtensionNotFound):
-                return await interaction.response.send_message(f'The cog "{cog_name}" couldn\'t be found to be loaded.',
+                return await interaction.response.send_message(f'The cog "{cog_name}" could not been loaded. Are you '
+                                                               'sure you spelled the name correctly?',
                                                                ephemeral=True)
             await interaction.response.send_message(
                 f'An error occurred while unloading cog "{cog_name}": {e}', ephemeral=True)
@@ -85,7 +86,8 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
         except commands.ExtensionError as e:
             # Throw a specific error if the cog hasn't been loaded
             if isinstance(e, discord.ext.commands.ExtensionNotLoaded):
-                return await interaction.response.send_message(f'The cog "{cog_name}" has not been loaded.',
+                return await interaction.response.send_message(f'The cog "{cog_name}" has not been loaded. Are you sure '
+                                                               'you spelled the name correctly?',
                                                                ephemeral=True)
             return await interaction.response.send_message(f'An error occurred while unloading cog "{cog_name}": {e}')
 
@@ -108,7 +110,8 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
         except commands.ExtensionError as e:
             # Throw a specific error if the cog hasn't been loaded
             if isinstance(e, discord.ext.commands.ExtensionNotLoaded):
-                return await interaction.response.send_message(f'The cog "{cog_name}" has not been loaded.',
+                return await interaction.response.send_message(f'The cog "{cog_name}" has not been loaded. Are you sure '
+                                                               'you spelled the name correctly?',
                                                                ephemeral=True)
             return await interaction.response.send_message(f'An error occurred while reloading cog "{cog_name}": {e}',
                                                            ephemeral=True)
