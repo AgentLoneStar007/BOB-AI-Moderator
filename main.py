@@ -30,6 +30,7 @@ custom_status = 'Use "/help" for help.'
 # TODO: Rework the log system because having to pass a string as an argument for the type of log is stupid as crap
 # TODO: Add an update system for BOB
 # TODO: Add a system to scan even text files for bad content
+# TODO: Check into using latest version of Wavelink
 
 
 class Bot(commands.Bot):
@@ -102,7 +103,6 @@ async def run() -> None:
                   ' on cooldown.')
             return await interaction.response.send_message('This command is on cooldown!', ephemeral=True)
 
-        # TODO: Find out why I commented this out
         # Handler for failing to respond to an interaction quickly enough
         if isinstance(error, discord.app_commands.CommandInvokeError):
             return print(f'Failed to respond to command "{interaction.command.name}" run by'
