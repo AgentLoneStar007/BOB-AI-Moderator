@@ -25,7 +25,6 @@ class FileScanner(commands.Cog, description="Example cog description."):
         return
 
     # Vars
-    # TODO: RE-ADD .TXT TO THIS LIST (I removed it for testing purposes)
     ingnorable_file_extensions: list = ['.jpg', '.png', '.jpeg', '.mp4', '.mp3', '.avi', '.mkv', '.webm', '.gif', '.ico', '.bmp', '.tiff', '.ttf', '.otf', '.csv', '.xml', '.log', '.json', '.docx', '.xlsx', '.pptx']
     unscannable_file_extensions: list = ['.iso', '.zip', '.tar', '.gz', '.bz2', '.xz', '.rar', '.7z', '.tgz', '.tbz2', '.cab', '.zipx', '.img', '.gz']
     uploaded_files: int
@@ -36,9 +35,8 @@ class FileScanner(commands.Cog, description="Example cog description."):
     async def on_ready(self) -> None:
         return print(f'Extension loaded: {self.__class__.__name__}')
 
-    # Listener: On Message
-    @commands.Cog.listener()
-    async def on_message(self, message: discord.Message) -> None:
+    # File scanner function
+    async def scanAttachedFiles(self, message: discord.Message) -> None:
         # Check if message was sent by the bot
         if message.author.id == self.bot.user.id:
             return
@@ -50,7 +48,7 @@ class FileScanner(commands.Cog, description="Example cog description."):
             # And create a list of all files that cannot be scanned
             unscannable_message_attachments: list = []
 
-            # There might be a better way to do the following, because this is a loop within a loop, which is probably
+            # There might be a better way to do the following, because these are loops within a loop, which is probably
             # more performance-intensive than necessary.
 
             # Run through each attachment,
@@ -69,7 +67,7 @@ class FileScanner(commands.Cog, description="Example cog description."):
                         unscannable_message_attachments.append(attachment.filename)
                         should_continue = True
 
-                # Add every risky file to a list
+                # If the should_continue var is True, continue
                 if should_continue:
                     continue
 
@@ -83,7 +81,7 @@ class FileScanner(commands.Cog, description="Example cog description."):
             # If there are no scan-able message attachments, notify users that the files cannot be verified
             if not message_attachments:
                 await message.reply(content='I cannot scan some or all of the attached files, so I cannot verify if'
-                                            'they are safe or not. Download at your own risk.')
+                                            ' they are safe or not. Download at your own risk.')
                 return
 
             # Log the download of the files to console and logfile

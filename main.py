@@ -26,11 +26,14 @@ custom_status = 'Use "/help" for help.'
 
 # TODO: Add interactive console for bot
 # TODO(maybe): Put that console in a web dashboard
-# TODO: Add a system where a user can leave a question or comment for a moderator to read(with spam prevention)
+# TODO: Update question-leaving system to include feedback and such
 # TODO: Rework the log system because having to pass a string as an argument for the type of log is stupid as crap
-# TODO: Add an update system for BOB
+# TODO: Add an update system for BOB that pulls files from the GitHub repo
 # TODO: Add a system to scan even text files for bad content
+# TODO: Add a system that uses VirusTotal to scan URLs
 # TODO: Check into using latest version of Wavelink
+# TODO: Figure out how to make auto-mod systems in individual cogs run in a specific order when performing the same
+#  operations (e.g., AI image scanner runs before file scanner if images are attached)
 
 
 class Bot(commands.Bot):

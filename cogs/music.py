@@ -857,4 +857,3 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 # Cog setup hook
 async def setup(bot):
     await bot.add_cog(Music(bot))
-
