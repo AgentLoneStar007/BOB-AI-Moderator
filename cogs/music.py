@@ -7,7 +7,7 @@ from discord.ext import commands, tasks
 import wavelink
 import datetime
 import re
-from utils.logger import logCommand, log
+from utils.logger import Log, logCommand, logCogLoad
 
 # TODO: Add cool-downs to commands to prevent spamming(which may or may not work)
 # TODO: Create limit on queue size for player
@@ -16,6 +16,9 @@ from utils.logger import logCommand, log
 # TODO: Add a command to go to specific song in queue
 # TODO: Add a queue shuffle command
 # TODO: Find a way to prevent people from playing videos with blocked words in the title
+
+# Create object of Log class
+log = Log()
 
 
 # The following three functions were written by ChatGPT. I know; shut up.
@@ -111,7 +114,9 @@ async def checkPlayer(interaction: discord.Interaction, custom_message: str = No
     try:
         player: wavelink.Player = interaction.guild.voice_client
         return player
-    except:
+    except Exception as e:
+        # TODO: Remove the following (it's here for testing purposes)
+        print(e)
         if not custom_message:
             custom_message: str = 'No music player is currently running.'
         await interaction.response.send_message(custom_message, ephemeral=True)
@@ -263,10 +268,11 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
     # Listener: On Ready
     @commands.Cog.listener()
-    async def on_ready(self):
+    async def on_ready(self) -> None:
+        logCogLoad(self.__class__.__name__)
         print(f'Extension loaded: {self.__class__.__name__}')
         self.checkIfConnectedToVoiceChannel.start()
-        print('Started background task "Check If Connected to Voice Channel."')
+        return print('Started background task "Check If Connected to Voice Channel."')
 
     # Task: Check if connected to voice channel
     @tasks.loop(minutes=5.0)

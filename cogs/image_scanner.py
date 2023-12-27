@@ -2,8 +2,11 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-from utils.logger import logCommand, log
+from utils.logger import Log, logCogLoad
 from utils.bot_utils import checkIfOwner
+
+# Create object of Log class
+log = Log()
 
 
 class ImageScanner(commands.Cog, description="Example cog description."):
@@ -14,6 +17,7 @@ class ImageScanner(commands.Cog, description="Example cog description."):
     # Listener: On Ready
     @commands.Cog.listener()
     async def on_ready(self) -> None:
+        logCogLoad(self.__class__.__name__)
         return print(f'Extension loaded: {self.__class__.__name__}')
 
     async def scanImage(self, message: discord.Message) -> None:

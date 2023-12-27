@@ -2,7 +2,7 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-from utils.logger import logCommand, log
+from utils.logger import Log, logCogLoad
 import vt
 from dotenv import load_dotenv
 import os
@@ -16,6 +16,9 @@ import io
 # Vars
 load_dotenv()
 VIRUS_TOTAL_API_KEY = os.getenv("VIRUS_TOTAL_API_KEY")
+
+# Create object of Log class to use
+log = Log()
 
 
 class FileScanner(commands.Cog, description="Example cog description."):
@@ -33,6 +36,7 @@ class FileScanner(commands.Cog, description="Example cog description."):
     # Listener: On Ready
     @commands.Cog.listener()
     async def on_ready(self) -> None:
+        logCogLoad(self.__class__.__name__)
         return print(f'Extension loaded: {self.__class__.__name__}')
 
     # File scanner function
@@ -87,13 +91,13 @@ class FileScanner(commands.Cog, description="Example cog description."):
             # Log the download of the files to console and logfile
             download_log_message: str = f'Downloading {len(message_attachments)} files for scanning...'
             print(download_log_message)
-            log('info', download_log_message)
+            log.info(download_log_message)
 
             # For every attachment in the list
             for attachment in message_attachments:
                 # Get the file's contents
                 file_content: bytes = await attachment.read()
-                # Set the download directory, which is the download directory, plus the
+                # Set the download directory, which is the download directory, then the message ID as the directory name
                 download_directory = f'./downloads/{str(message.id)}'
                 os.mkdir(download_directory)
                 filename = f'{download_directory}/{attachment.filename}'
@@ -102,7 +106,7 @@ class FileScanner(commands.Cog, description="Example cog description."):
                 # Get the file's total size, in bytes
                 total_size = len(file_content)
 
-                # Download the file, showing a progress bar
+                # Download the file, showing a progress bar(which may or may not work)
                 with tqdm(total=total_size, desc=f"Downloading {attachment.filename}", unit_scale=True) as progress_bar:
                     # Save the file content to the specified file
                     with open(filename, "wb") as file:
@@ -113,7 +117,7 @@ class FileScanner(commands.Cog, description="Example cog description."):
             # Announce downloaded files in console and log it to file
             log_message = f'Downloaded {len(message_attachments)} files for scanning from message by user "{message.author.name}" in channel {message.channel.name}.'
             print(log_message)
-            log('info', log_message)
+            log.info(log_message)
 
             # Get the text content of the message. If there's no text, set message_text to equal None
             message_text: str = message.content if message.content else None
@@ -141,7 +145,7 @@ class FileScanner(commands.Cog, description="Example cog description."):
                     message_text = message_text[:-300] + '...'
 
                 # Update the notify message accordingly
-                notify_message = notify_message + f'\n\nOriginal Message:\n{message_text}'
+                notify_message = notify_message + f'\n\n**Original Message:**\n{message_text}'
 
             # Delete the original message
             await message.delete()
@@ -154,5 +158,5 @@ class FileScanner(commands.Cog, description="Example cog description."):
         return
 
 
-async def setup(bot):
-    await bot.add_cog(FileScanner(bot))
+async def setup(bot) -> None:
+    return await bot.add_cog(FileScanner(bot))

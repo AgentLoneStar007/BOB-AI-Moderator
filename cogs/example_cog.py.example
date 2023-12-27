@@ -2,9 +2,11 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-from utils.logger import logCommand, log
+from utils.logger import Log, logCommand, logCogLoad
 from utils.bot_utils import checkIfOwner
 
+# Create object of Log class
+log = Log()
 
 # Example cog class
 class ExampleCog(commands.Cog, description="Example cog description."):
@@ -15,6 +17,7 @@ class ExampleCog(commands.Cog, description="Example cog description."):
     # Example listener
     @commands.Cog.listener()
     async def on_ready(self) -> None:
+        logCogLoad(self.__class__.__name__)
         return print(f'Extension loaded: {self.__class__.__name__}')
 
     # Example command

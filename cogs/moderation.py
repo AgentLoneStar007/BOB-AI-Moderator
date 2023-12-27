@@ -7,7 +7,6 @@ import re
 from datetime import datetime
 from datetime import timedelta
 import json
-import asyncio
 from utils.logger import log, logCogLoad
 from utils.bot_utils import sendMessage
 
@@ -25,8 +24,8 @@ def loadBlockedWords() -> list:
 # TODO: Add nuke prevention
 # TODO(maybe): Add server lock command
 # TODO: Add an AI-powered image detection system that can detect blocked words in an image and NSFW content
-# TODO: See if the above system can also work with videos
-# TODO: Add on-demand(or maybe automatic) file scanning via the VirusTotal API
+# TODO: See if the above system can also work with videos, gifs, and so forth.
+# TODO: See if media with audio can be scanned using text-to-speech in order to detect blocked words/phrases.
 
 class Moderation(commands.GroupCog, description='Commands relating to moderation utilities.'):
     # Define vars
@@ -73,8 +72,13 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
                 # Stop checking for blocked words after the first word is found
                 return
 
-        # TODO: Prevent further scans from being run if the message is deleted or something by using return statements
-        #  or something along those lines
+        # TODO: Check message attachments here. If there are any, first scan the names using the system above and see
+        #  if they contain blocked words. (Delete the message and stop scans if they do.) If they pass, then check if
+        #  any of the files are images/media. If they are, run an image scan on them first, even if there are files
+        #  needing scanning. If they pass the image scanner, then scan the files, if any, and if possible. (And through
+        #  this, the files themselves will be passed to the individual scan functions, if needed. If not needed, the
+        #  functions won't be run at all. This should help performance.) Finally, pass the message to the spam
+        #  prevention system. This should be the best and most fool-proof system.
 
         # Second scan: Scan images (if any) for bad content (second scan because scanning for blocked words is first)
         image_scanner_cog_instance = self.bot.get_cog('ImageScanner')

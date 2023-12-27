@@ -13,8 +13,10 @@ import wavelink
 from dotenv import load_dotenv
 import asyncio
 import os
+
+import utils.logger
 from utils.load_extensions import loadExtensions
-from utils.logger import log, logsInit
+from utils.logger import Log, initLoggingUtility
 from utils.bot_utils import defIntents
 
 # Vars
@@ -26,20 +28,18 @@ custom_status = 'Use "/help" for help.'
 
 # TODO: Add interactive console for bot
 # TODO(maybe): Put that console in a web dashboard
-# TODO: Update question-leaving system to include feedback and such
-# TODO: Rework the log system because having to pass a string as an argument for the type of log is stupid as crap
+# TODO: Finish implementing updated log system
 # TODO: Add an update system for BOB that pulls files from the GitHub repo
 # TODO: Add a system to scan even text files for bad content
 # TODO: Add a system that uses VirusTotal to scan URLs
 # TODO: Check into using latest version of Wavelink
-# TODO: Figure out how to make auto-mod systems in individual cogs run in a specific order when performing the same
-#  operations (e.g., AI image scanner runs before file scanner if images are attached)
+
+# Init log system
+initLoggingUtility()
+log = Log()
 
 
 class Bot(commands.Bot):
-    # Init log system
-    logsInit()
-
     # Bot init stuff
     def __init__(self) -> None:
         # Set intents
@@ -68,7 +68,7 @@ Custom Status: "{custom_status}"
 ------------------------------
 ''')
         # Log ready event
-        log('info', f'{self.user.name} online and ready.')
+        log.info(f'{self.user.name} online and ready.')
 
         # Change the bots' status
         await self.change_presence(status=discord.Status.online, activity=discord.CustomActivity(custom_status))
@@ -121,7 +121,7 @@ async def run() -> None:
             print(error_message)
             await interaction.response.send_message(
                 f'An error occurred when trying to run that command:\n```{error}```', ephemeral=True)
-            return log('error', error_message)
+            return log.error(error_message)
 
     # Load extensions and start bot, all in time with the bot itself
     async with bot:

@@ -2,9 +2,12 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-from utils.logger import logCommand, log
+from utils.logger import Log, logCommand, logCogLoad
 from dotenv import load_dotenv
 import os
+
+# Create object of Log class
+log = Log()
 
 # Vars
 load_dotenv()
@@ -58,6 +61,7 @@ class MemberUtils(commands.Cog, description="Utilities for server members."):
     # Listener: On Ready
     @commands.Cog.listener()
     async def on_ready(self) -> None:
+        logCogLoad(self.__class__.__name__)
         return print(f'Extension loaded: {self.__class__.__name__}')
 
     # Command: Question
@@ -71,7 +75,7 @@ class MemberUtils(commands.Cog, description="Utilities for server members."):
         question_modal: discord.ui.Modal = QuestionModal()
         question_modal.user = interaction.user
         await interaction.response.send_modal(question_modal)
-        return log('info', '')
+        return log.info(f'{interaction.user.name} started a questionnaire form for staff to answer.')
 
 
 async def setup(bot) -> None:
