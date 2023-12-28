@@ -8,7 +8,7 @@ import os
 logFolder = 'logs'
 
 
-def formatInput(typeInput):
+def formatInput(typeInput) -> str:
     if typeInput == 'WARN':
         return 'WARNING'
     if typeInput == 'ERR':
@@ -58,8 +58,7 @@ class Log:
 
         # Get current file to log to
         with open('logs/current.txt', 'r') as file:
-            log_file = file.read()
-            print(type(log_file))
+            log_file: str = file.read()
 
         with open(f'{logFolder}/{log_file}', 'a+') as logFile:
             logFile.write(f'{currentTime} <INFO>: {message}\n')
@@ -76,7 +75,7 @@ class Log:
             log_file: str = file.read()
 
         with open(f'{logFolder}/{log_file}', 'a+') as logFile:
-            logFile.write(f'{currentTime} <WARNING>: {message}\n')
+            logFile.write(f'\033[93m{currentTime} <WARNING>: {message}\n\033[0m')
 
         return
 
@@ -90,7 +89,7 @@ class Log:
             log_file: str = file.read()
 
         with open(f'{logFolder}/{log_file}', 'a+') as logFile:
-            logFile.write(f'{currentTime} <ERROR>: {message}\n')
+            logFile.write(f'\033[31m{currentTime} <ERROR>: {message}\n\033[0m')
 
         return
 
@@ -104,54 +103,71 @@ class Log:
             log_file: str = file.read()
 
         with open(f'{logFolder}/{log_file}', 'a+') as logFile:
-            logFile.write(f'{currentTime} <DEBUG>: {message}\n')
+            logFile.write(f'\033[37m{currentTime} <DEBUG>: {message}\n\033[0m')
+
+        return
+
+    def logCommand(self, user, command, channelID: int = None) -> None:
+        # Set default message
+        message = f'{user} ran command "{command}."'
+
+        # If a channel ID is provided, log it.
+        if channelID:
+            message = f'{user} ran command "{command}" in channel "{channelID}."'
+
+        # Log the command
+        self.info(message)
+
+        del message
+        return
+
+    def logCogLoad(self, cog) -> None:
+        # Log the cog init to file
+        self.info(f'Loaded cog {cog}.')
 
         return
 
 
-def log(infoType, message) -> None:
-    # Create current time var
-    now = datetime.now()
-    currentTime: str = now.strftime('[%m/%d/%Y-%H:%M:%S]')
-
-    # Get current file to log to
-    with open('logs/current.txt', 'r') as file:
-        log_file: str = file.read()
-
-    # Format input in case something stupid was used like 'err' for error.
-    infoType = infoType.upper()
-    infoTypes = ['INFO', 'WARNING', 'ERROR', 'DEBUG']
-    if infoType not in infoTypes:
-        infoType = formatInput(infoType)
-
-    with open(f'{logFolder}/{log_file}', 'a+') as logFile:
-        logFile.write(f'{currentTime} <{infoType}>: {message}\n')
-
-
-def logCommand(user, command, channelID: int = None) -> None:
+# Class/function for
+class LogAndPrint:
     # Create object of Log class
     log = Log()
 
-    # Set default message
-    message = f'{user} ran command "{command}."'
+    def info(self, message: str):
+        # Create current time var
+        now = datetime.now()
+        currentTime: str = now.strftime('[%m/%d/%Y-%H:%M:%S]')
 
-    # If a channel ID is provided, log it.
-    if channelID:
-        message = f'{user} ran command "{command}" in channel "{channelID}."'
+        # Print the message and log it to file
+        print(f'{currentTime} <INFO>: {message}')
+        self.log.info(message)
 
-    # Log the command
-    log.info(message)
+    def warning(self, message: str):
+        # Create current time var
+        now = datetime.now()
+        currentTime: str = now.strftime('[%m/%d/%Y-%H:%M:%S]')
 
-    del log
-    return
+        # Print the message and log it to file
+        print(f'\033[93m{currentTime} <WARNING>: {message}\033[0m')
+        self.log.warning(message)
 
+    def error(self, message: str):
+        # Create current time var
+        now = datetime.now()
+        currentTime: str = now.strftime('[%m/%d/%Y-%H:%M:%S]')
 
-def logCogLoad(cog) -> None:
-    # Create object of Log class
-    log = Log()
+        # Print the message and log it to file
+        print(f'\033[31m{currentTime} <ERROR>: {message}\033[0m')
+        self.log.error(message)
 
-    # Log the cog init
-    log.info(f'Loaded cog {cog}.')
-    del log
+    def logCogLoad(self, cog) -> None:
+        # Create current time var
+        now = datetime.now()
+        currentTime: str = now.strftime('[%m/%d/%Y-%H:%M:%S]')
 
-    return
+        # Print the cog load to console
+        print(f'{currentTime} <INFO>: Loaded cog: {cog}')
+        # Log the cog init to file
+        self.log.info(f'Loaded cog: {cog}')
+
+        return

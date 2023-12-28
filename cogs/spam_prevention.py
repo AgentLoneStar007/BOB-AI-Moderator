@@ -2,8 +2,12 @@
 import discord
 import asyncio
 from discord.ext import commands
-from utils.logger import logCommand, log
-from utils.bot_utils import checkIfOwner
+from utils.logger import Log, LogAndPrint
+
+
+# Create object of Log and LogAndPrint class
+log = Log()
+logandprint = LogAndPrint()
 
 
 class SpamPrevention(commands.Cog, description="Prevents users from sending large amounts of messages at once."):
@@ -70,7 +74,7 @@ class SpamPrevention(commands.Cog, description="Prevents users from sending larg
     # Listener: On Ready
     @commands.Cog.listener()
     async def on_ready(self) -> None:
-        return print(f'Extension loaded: {self.__class__.__name__}')
+        return logandprint.logCogLoad(self.__class__.__name__)
 
     # Check message for spam function
     async def checkForSpam(self, message: discord.Message) -> None:

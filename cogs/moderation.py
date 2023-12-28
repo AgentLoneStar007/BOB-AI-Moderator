@@ -7,9 +7,12 @@ import re
 from datetime import datetime
 from datetime import timedelta
 import json
-from utils.logger import log, logCogLoad
+from utils.logger import Log, LogAndPrint
 from utils.bot_utils import sendMessage
 
+# Create object of Log and LogAndPrint class
+log = Log()
+logandprint = LogAndPrint()
 
 def loadBlockedWords() -> list:
     with open('data/moderation/blocked_words.txt', 'r') as file:
@@ -44,10 +47,9 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
     # Listener: On Ready
     @commands.Cog.listener()
     async def on_ready(self) -> None:
-        print(f'Extension loaded: {self.__class__.__name__}')
-        logCogLoad(self.__class__.__name__)
+        logandprint.logCogLoad(self.__class__.__name__)
         self.checkForNeededUnbans.start()
-        return print('Started background task "Check for Needed Unbans."')
+        return logandprint.info('Started background task "Check for Needed Unbans."')
 
     # TODO: Add returns in this function as well
     # Listener: On Message
@@ -67,7 +69,7 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
                 await message.author.send(
                     f"{message.author.mention}, your message contains a rule-breaking word or phrase. If this is in "
                     "error, please reach out to a moderator. This is your (feature coming soon) offense.")
-                log('info', f'User {message.author} sent a message containing a blocked word or phrase.')
+                log.info(f'User {message.author} sent a message containing a blocked word or phrase.')
 
                 # Stop checking for blocked words after the first word is found
                 return
@@ -122,9 +124,7 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
                                       f'User {after.mention} has a status containing a blocked word or phrase.')
 
                     # Log the offense to console and logfile
-                    message = f'User {after.display_name} has a status containing a blocked word or phrase.'
-                    print(message)
-                    log('info', message)
+                    logandprint.info(f'User {after.display_name} has a status containing a blocked word or phrase.')
 
                     # Stop checking for blocked words after the first word is found
                     break
@@ -176,15 +176,13 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
 
                     # Notify that the user has been unbanned
                     await sendMessage(self.bot, self.bot_output_channel, message)
-                    print(message)
-                    return log('info', message)
+                    return logandprint.info(message)
 
                 else:
                     # If the user can't be found, log it to Discord, console, and file
                     message = f'User {member.display_name}\'s temporary ban has expired, but the user could not be found to be unbanned.'
                     await sendMessage(self.bot, self.bot_output_channel, message)
-                    print(message)
-                    return log('info', message)
+                    return logandprint.info(message)
             else:
                 continue
         return
@@ -203,8 +201,7 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
             message = f'{member.display_name} has been kicked from the server. Reason: "{reason}"'
             await member.kick(reason=reason)
             await sendMessage(self.bot, self.bot_output_channel, message)
-            log('info', message)
-            return
+            return log.info(message)
         except discord.Forbidden:
             await interaction.response.send_message('You don\'t have permission to use this command.', ephemeral=True)
             return
@@ -227,10 +224,11 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
             await sendMessage(self.bot, self.bot_output_channel, message)
             await interaction.response.send_message(f'User `{member.display_name}` was banned from the server.',
                                                     ephemeral=True)
-            return log('info', message)
+            return logandprint.info(message)
         except discord.HTTPException as e:
             await interaction.response.send_message(f'The following error occurred when trying to ban member {member.mention}: ```{e}```', ephemeral=True)
-            return
+
+            return logandprint.error(f'The following error occurred when trying to ban member {member.mention}: {e}')
 
     # Command: TempBan
     @app_commands.command(name='tempban', description=
@@ -280,9 +278,7 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
                           f'{member.mention}(ID: `{member.id}`) has been temporarily banned till <t:{unban_timestamp}:f> UTC. Reason: "{reason}".')
         await interaction.response.send_message(
             f'{member.mention} was temporarily banned. See `#bot-output` for more info.', ephemeral=True)
-        log('info',
-            f'{member.name}(ID: {member.id}) has been temporarily banned till {unban_time} UTC. Reason: "{reason}".')
-        return
+        return logandprint.info(f'{member.name}(ID: {member.id}) has been temporarily banned till {unban_time} UTC. Reason: "{reason}".')
 
     # Command: Unban
     @app_commands.command(name='unban', description='Unbans a user. Syntax: "/unban <user ID>"')
@@ -310,11 +306,11 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
                 message = f'{entry.user.mention}(ID: `{entry.user.id}`) has been unbanned by {interaction.user.mention}.'
                 await sendMessage(self.bot, self.bot_output_channel, message)
                 await interaction.response.send_message(f'Unbanned user {entry.user.display_name}.', ephemeral=True)
-                return log('info', message)
+                return logandprint.info(message)
 
         # Notify that the user is not banned.
         await interaction.response.send_message('That user has not been banned.', ephemeral=True)
-        return log('info', f'{interaction.user} attempted to unban user with ID "{user_id}."')
+        return logandprint.info(f'{interaction.user} attempted to unban user with ID "{user_id}."')
 
     # Command: Purge
     @app_commands.command(name='purge', description='Delete a specified number of messages. (Limit 100.)')
@@ -329,22 +325,20 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
             # Send a notifying message, then delete it after three seconds.
             if amount == 1:
                 # Make the message pretty if it's only one message to delete
-                notifying_message = await interaction.response.send_message('Deleted the last sent message.',
-                                                                            ephemeral=True)
-                log('info', logMessage)
+                await interaction.response.send_message('Deleted the last sent message.', ephemeral=True)
+                logandprint.info(logMessage)
             else:
-                notifying_message = await interaction.response.send_message(
-                    f'Deleted the last {len(deleted) - 1} messages.', ephemeral=True)
-                log('info', logMessage)
+                await interaction.response.send_message(f'Deleted the last {len(deleted) - 1} messages.', ephemeral=True)
+                logandprint.info(logMessage)
         else:
             # Log the attempted usage of the command
             logMessage = f'User {interaction.user} attempted to purge {amount} message(s) from channel "{interaction.channel}."'
             if amount < 1:
                 await interaction.response.send_message('The amount must be at least one.', ephemeral=True)
-                log('info', logMessage)
+                logandprint.info(logMessage)
             elif amount > 100:
                 await interaction.response.send_message("The amount must be under 100.", ephemeral=True)
-                log('info', logMessage)
+                logandprint.info(logMessage)
             return
 
     # Command: ReloadBlockedWords

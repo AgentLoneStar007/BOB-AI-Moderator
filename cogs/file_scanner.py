@@ -2,7 +2,7 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-from utils.logger import Log, logCogLoad
+from utils.logger import Log, LogAndPrint
 import vt
 from dotenv import load_dotenv
 import os
@@ -17,8 +17,9 @@ import io
 load_dotenv()
 VIRUS_TOTAL_API_KEY = os.getenv("VIRUS_TOTAL_API_KEY")
 
-# Create object of Log class to use
+# Create object of Log and LogAndPrint class
 log = Log()
+logandprint = LogAndPrint()
 
 
 class FileScanner(commands.Cog, description="Example cog description."):
@@ -36,8 +37,7 @@ class FileScanner(commands.Cog, description="Example cog description."):
     # Listener: On Ready
     @commands.Cog.listener()
     async def on_ready(self) -> None:
-        logCogLoad(self.__class__.__name__)
-        return print(f'Extension loaded: {self.__class__.__name__}')
+        return logandprint.logCogLoad(self.__class__.__name__)
 
     # File scanner function
     async def scanAttachedFiles(self, message: discord.Message) -> None:

@@ -2,12 +2,13 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-from utils.logger import Log, logCommand, logCogLoad
+from utils.logger import Log, LogAndPrint
 from dotenv import load_dotenv
 import os
 
-# Create object of Log class
+# Create object of Log and LogAndPrint class
 log = Log()
+logandprint = LogAndPrint()
 
 # Vars
 load_dotenv()
@@ -44,13 +45,13 @@ class QuestionModal(discord.ui.Modal, title='Question for Staff'):
         await channel.send(embed=embed)
         await interaction.response.send_message(f'Your question was submitted, {self.user.mention}, and a response will '
                                                 'be issued shortly.', ephemeral=True)
-        return logCommand('info', f'User {interaction.user.name} submitted a question to staff.')
+        return log.info(f'User {interaction.user.name} submitted a question to staff.')
 
     # This function will be run if there's an error
     async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
         await interaction.response.send_message('The following error occurred when trying to submit your form: '
                                                  f'{error}', ephemeral=True)
-        return log('info', f'An error occurred when user {interaction.user.name} tried to submit a question.')
+        return log.error(f'An error occurred when user {interaction.user.name} tried to submit a question.')
 
 
 class MemberUtils(commands.Cog, description="Utilities for server members."):
@@ -61,8 +62,7 @@ class MemberUtils(commands.Cog, description="Utilities for server members."):
     # Listener: On Ready
     @commands.Cog.listener()
     async def on_ready(self) -> None:
-        logCogLoad(self.__class__.__name__)
-        return print(f'Extension loaded: {self.__class__.__name__}')
+        return logandprint.logCogLoad(self.__class__.__name__)
 
     # Command: Question
     @app_commands.command(name='question', description='Leave a question for the server staff to answer.')

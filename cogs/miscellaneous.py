@@ -2,13 +2,14 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-from utils.logger import logCommand, Log, logCogLoad
+from utils.logger import Log, LogAndPrint
 from utils.bot_utils import checkIfOwner
 
 # TODO: Add cool-downs to commands to prevent spamming(which may or may not work)
 
-# Create object of Log class to use
+# Create object of Log and LogAndPrint class
 log = Log()
+logandprint = LogAndPrint()
 
 
 class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
@@ -17,9 +18,9 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
 
     # Listener: On Ready
     @commands.Cog.listener()
-    async def on_ready(self):
-        print(f'Extension loaded: {self.__class__.__name__}')
-        logCogLoad(self.__class__.__name__)
+    async def on_ready(self) -> None:
+        logandprint.logCogLoad(self.__class__.__name__)
+        return
 
     # Command: Info
     @app_commands.command(name='info', description='Provide a list of information regarding B.O.B.')
@@ -37,7 +38,7 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
         info_embed.add_field(name='Using:', value='[Discord.py](https://github.com/Rapptz/discord.py)')
 
         await interaction.response.send_message(embed=info_embed, ephemeral=True)
-        return logCommand(interaction.user, 'info', interaction.channel)
+        return log.logCommand(interaction.user, interaction.command.name)
 
     # Command: Load
     @app_commands.command(name='load', description='Load a cog. (Only usable by bot owner.)')
