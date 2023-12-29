@@ -157,7 +157,16 @@ class LogAndPrint:
         currentTime: str = now.strftime('[%m/%d/%Y-%H:%M:%S]')
 
         # Print the message and log it to file
-        print(f'\033[31m{currentTime} <ERROR>: {message}\033[0m')
+        print(f'\033[91m{currentTime} <ERROR>: {message}\033[0m')
+        self.log.error(message)
+
+    def fatal(self, message: str):
+        # Create current time var
+        now = datetime.now()
+        currentTime: str = now.strftime('[%m/%d/%Y-%H:%M:%S]')
+
+        # Print the message and log it to file
+        print(f'\033[31m{currentTime} <FATAL>: {message}\033[0m')
         self.log.error(message)
 
     def logCogLoad(self, cog) -> None:

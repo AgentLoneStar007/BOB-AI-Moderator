@@ -9,6 +9,10 @@ from utils.logger import Log, LogAndPrint
 log = Log()
 logandprint = LogAndPrint()
 
+# TODO: Redo spam prevention system. My ideas are a more "smart" way of preventing spam, and getting less false
+#  positives by comparing the message author to the author of the last message sent, and adjusting cooldown times more.
+#  (The current system seems like it could have a lot of people getting muted when not spamming.)
+
 
 class SpamPrevention(commands.Cog, description="Prevents users from sending large amounts of messages at once."):
     # Define vars

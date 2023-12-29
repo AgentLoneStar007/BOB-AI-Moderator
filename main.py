@@ -38,6 +38,7 @@ log = Log()
 logandprint = LogAndPrint()
 
 
+# Bot class, in which most bot variables and such are declared
 class Bot(commands.Bot):
     # Bot init stuff
     def __init__(self) -> None:
@@ -82,6 +83,7 @@ Custom Status: "{custom_status}"
         return await ctx.send(message)
 
 
+# Main program function
 async def run() -> None:
     # Create the bot from the Bot class
     bot = Bot()
@@ -121,6 +123,12 @@ async def run() -> None:
         await loadExtensions(bot)
         await bot.start(BOT_TOKEN)
 
-# Run the bot
+# Start the bot
 if __name__ == "__main__":
-    asyncio.run(run())
+    # Put bot in a try/except for error handling
+    try:
+        asyncio.run(run())
+    except KeyboardInterrupt:
+        logandprint.info('Shutting down!')
+    except Exception as e:
+        logandprint.fatal(f'B.O.B encountered a critical error and had to shut down! Error: {e}')
