@@ -1,6 +1,4 @@
 # Imports
-import asyncio
-
 import discord
 from discord import app_commands
 from discord.ext import commands, tasks
@@ -54,6 +52,7 @@ def checkIfTimeFormatValid(input_str) -> bool:
         return False
 
 
+# TODO: Add data type declarations to hh_mm... and mm_ss.. vars
 def timeToMilliseconds(time_str) -> int:
     # Regular expression pattern for HH:MM:SS and MM:SS formats
     hh_mm_ss_pattern = r'^(\d{2}):(\d{2}):(\d{2})$'
@@ -73,7 +72,7 @@ def timeToMilliseconds(time_str) -> int:
         raise ValueError("Invalid time format. Use HH:MM:SS or MM:SS.")
 
     # Convert total seconds to milliseconds
-    milliseconds = total_seconds * 1000
+    milliseconds: int = total_seconds * 1000
     return milliseconds
 
 
@@ -84,13 +83,13 @@ async def runChecks(interaction: discord.Interaction, BotNotInVC=None, UserNotIn
     bot_vc = interaction.guild.voice_client
 
     if not BotNotInVC:
-        BotNotInVC = 'I am not connected to a voice channel.'
+        BotNotInVC: str = 'I am not connected to a voice channel.'
 
     if not UserNotInVCMsg:
-        UserNotInVCMsg = 'You must be connected to the same channel as me to perform this action.'
+        UserNotInVCMsg: str = 'You must be connected to the same channel as me to perform this action.'
 
     if not UserInDifferentVCMsg:
-        UserInDifferentVCMsg = 'You must be in the same channel as me to perform this action.'
+        UserInDifferentVCMsg: str = 'You must be in the same channel as me to perform this action.'
 
     # Bot not connected to VC
     if not bot_vc:
@@ -117,7 +116,8 @@ async def checkPlayer(interaction: discord.Interaction, custom_message: str = No
         return player
     except Exception as e:
         # TODO: Remove the following (it's here for testing purposes)
-        print(e)
+        logandprint.debug(f'This is the error output for the try/except in the checkPlayer function in the music.py '
+                          f'cog. The error output is: {e}')
         if not custom_message:
             custom_message: str = 'No music player is currently running.'
         await interaction.response.send_message(custom_message, ephemeral=True)

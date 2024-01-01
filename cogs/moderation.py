@@ -8,11 +8,12 @@ from datetime import datetime
 from datetime import timedelta
 import json
 from utils.logger import Log, LogAndPrint
-from utils.bot_utils import sendMessage
+from utils.bot_utils import sendMessage, cleanup
 
 # Create object of Log and LogAndPrint class
 log = Log()
 logandprint = LogAndPrint()
+
 
 def loadBlockedWords() -> list:
     with open('data/moderation/blocked_words.txt', 'r') as file:
@@ -32,13 +33,13 @@ def loadBlockedWords() -> list:
 
 class Moderation(commands.GroupCog, description='Commands relating to moderation utilities.'):
     # Define vars
-    blocked_words = loadBlockedWords()
-    bot_output_channel = '1155842466482753656'
-    user_message_counts_1 = {}
-    user_message_counts_2 = {}
-    user_message_counts_3 = {}
-    message_reset_interval = 30  # in seconds
-    message_limit = 7  # message limit per reset interval
+    blocked_words: list = loadBlockedWords()
+    bot_output_channel: str = '1155842466482753656'
+    user_message_counts_1: dict = {}
+    user_message_counts_2: dict = {}
+    user_message_counts_3: dict = {}
+    message_reset_interval: int = 30  # in seconds
+    message_limit: int = 7  # message limit per reset interval
 
     def __init__(self, bot) -> None:
         self.bot = bot
@@ -56,23 +57,91 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message) -> None:
         # Check if message was sent by the bot
-        # This is an early stage of nuke prevention
+        # Using "self.bot.user.id" instead of "is_bot" is an early stage of nuke prevention
         if message.author.id == self.bot.user.id:
             return
+
+        # Vars
+        attachment_names: list = []
+
+        # Check if message has any attachments
+        if message.attachments:
+            # If it does, append the file name of each attachment to a list
+            for x in message.attachments:
+                attachment_names.append(x.filename)
 
         # Use Regex formatting to search message for blocked words.
         message_content = re.sub(r'[^a-zA-Z0-9]', '', message.content.lower())
         for blocked_word in self.blocked_words:
             if re.search(rf'\b{re.escape(blocked_word)}\b', message_content):
+                original_message_content: str = message.content
+                await sendMessage(
+                    self.bot,
+                    channel_id=self.bot_output_channel,
+                    message=f'User {message.author.mention} sent a message containing one or more blocked words or '
+                            f'phrases in channel {message.channel.mention}.\n\n**Original message:**'
+                            # What the following spaghetti code does is, basically, if the message is more than 1,900
+                            #  characters, it cuts off the last 100 characters and appends three dots. If the message is
+                            #  not over 1,900 characters, it prints the entire message. The || at the start and finish
+                            #  is to mark the message as a spoiler, meaning the server staff don't have to read the 
+                            #  message if they don't want to. I set it to 100 characters to account for the possible 
+                            #  length of a nickname, since "message.author.mention" is used.
+                            f'\n||{(original_message_content[:-100] + "...") if len(original_message_content) > 1900 else original_message_content}||')
+
                 # Delete the message containing the blocked word, notify the user, and log the offense
                 await message.delete()
                 await message.author.send(
                     f"{message.author.mention}, your message contains a rule-breaking word or phrase. If this is in "
-                    "error, please reach out to a moderator. This is your (feature coming soon) offense.")
-                log.info(f'User {message.author} sent a message containing a blocked word or phrase.')
+                    "error, please reach out to a moderator.")
+                logandprint.warning(f'User {message.author} sent a message containing a blocked word or phrase '
+                                    f'in channel #{message.channel.name}.', source='d')
+
+                # Run cleanup
+                cleanup(original_message_content, attachment_names, message)
 
                 # Stop checking for blocked words after the first word is found
                 return
+
+            # Scan each file name as well
+            if attachment_names:
+                for name in attachment_names:
+                    if re.search(rf'\b{re.escape(blocked_word)}\b', name):
+                        # Create a variable containing the filename with the blocked word/phrase
+                        blocked_name: str = name
+
+                        # Notify staff of the infraction
+                        await sendMessage(self.bot,
+                                          self.bot_output_channel,
+                                          f'User {message.author.mention} sent a message that had an attached '
+                                          'file with a name containing a blocked word or phrase in channel '
+                                          f'{message.channel.mention}.\n\n**The filename:**||{blocked_name}||.')
+
+                        # Delete the message
+                        await message.delete()
+
+                        notify_message: str = (f'{message.author.mention}, you sent a message with an attached file '
+                                               'that had a name containing a rule-breaking word or phrase. If this '
+                                               'is in error, reach out to the server staff using '
+                                               f'`/question`.\n\n**The filename in question: `{blocked_name}`')
+
+                        # If the message had text attached, attach the original message to the notify message, handling
+                        # message length as needed in the one-line if statement
+                        if message.content:
+                            notify_message = notify_message + '\n\n**Your original message:**\n' + ((message_content[:-200] + '...') if len(message.content) > 1800 else message_content)
+
+                        # Notify the message author
+                        await message.author.send(notify_message)
+
+                        # Log the infraction
+                        logandprint.warning(
+                            f'User {message.author.name} sent a message with an attached file that had a name '
+                            f'containing a blocked word or phrase in channel "{message.channel.name}."', source='d')
+
+                        # Run cleanup
+                        cleanup(attachment_names, blocked_name, message, notify_message)
+
+                        # Stop checking
+                        return
 
         # TODO: Check message attachments here. If there are any, first scan the names using the system above and see
         #  if they contain blocked words. (Delete the message and stop scans if they do.) If they pass, then check if
@@ -82,20 +151,33 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
         #  functions won't be run at all. This should help performance.) Finally, pass the message to the spam
         #  prevention system. This should be the best and most fool-proof system.
 
-        # Second scan: Scan images (if any) for bad content (second scan because scanning for blocked words is first)
-        image_scanner_cog_instance = self.bot.get_cog('ImageScanner')
-        if image_scanner_cog_instance:
-            await image_scanner_cog_instance.scanImage(message)
+        if message.attachments:
+            # Second scan: Scan images for bad content (this is the second scan because scanning for blocked words is
+            # first)
+            image_scanner_cog_instance = self.bot.get_cog('ImageScanner')
+            if image_scanner_cog_instance:
+                # If media scanner returns False, media did not pass the scan.
+                if not await image_scanner_cog_instance.scanImage(message):
+                    return
 
-        # Third scan: Scan files (if any) for viruses
-        file_scanner_cog_instance = self.bot.get_cog('FileScanner')
-        if file_scanner_cog_instance:
-            await file_scanner_cog_instance.scanAttachedFiles(message)
+            logandprint.debug('Prevented scan of files due to file scanner system not being complete.', source='d')
+
+            # Third scan: Scan files for viruses
+            #file_scanner_cog_instance = self.bot.get_cog('FileScanner')
+            #if file_scanner_cog_instance:
+            #    if not await file_scanner_cog_instance.scanAttachedFiles(message):
+            #        return
+
+            # Cleanup
+            #cleanup(image_scanner_cog_instance, file_scanner_cog_instance)
 
         # Fourth scan: Prevent spamming
         spam_prevention_cog_instance = self.bot.get_cog('SpamPrevention')
         if spam_prevention_cog_instance:
             await spam_prevention_cog_instance.checkForSpam(message)
+
+        # Cleanup
+        cleanup(spam_prevention_cog_instance)
 
         return
 
@@ -109,25 +191,30 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
 
         # Check user status to see if it's changed
         if before.activity != after.activity:
-            user_status = str(after.activity)
-            user_status = re.sub(r'[^a-zA-Z0-9]', '', user_status.lower())
+            user_status: str = str(after.activity)
+            user_status: str = re.sub(r'[^a-zA-Z0-9]', '', user_status.lower())
 
             for blocked_word in self.blocked_words:
                 if re.search(rf'\b{re.escape(blocked_word)}\b', user_status):
                     # Notify the user of their infraction
                     await after.send(f'{after.mention}, your status contains a rule-breaking word or phrase.'
-                                     ' If this is in error, please reach out to a moderator. '
-                                     'If you do not update your status, you will be kicked from the server.')
+                                     ' If this is in error, please reach out to a moderator using `/question`.'
+                                     'If you do not update your status, you will be kicked or banned from the server.')
 
                     # Notify moderators of the rule-breaking status
-                    await sendMessage(self.bot, self.bot_output_channel,
-                                      f'User {after.mention} has a status containing a blocked word or phrase.')
+                    await sendMessage(self.bot, channel_id=self.bot_output_channel,
+                                      message=f'User {after.mention} has a status containing a blocked word or phrase.')
 
                     # Log the offense to console and logfile
-                    logandprint.info(f'User {after.display_name} has a status containing a blocked word or phrase.')
+                    logandprint.warning(f'User {after.display_name} has a status containing a blocked word or phrase.',
+                                        source='d')
 
                     # Stop checking for blocked words after the first word is found
                     break
+
+            # Run cleanup
+            cleanup(user_status)
+
             # Return if no bad words found
             return
         # Return if status is unchanged
@@ -136,6 +223,11 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
     # Task: Check for users needing to be unbanned
     @tasks.loop(minutes=2.0)
     async def checkForNeededUnbans(self) -> None:
+        # Vars
+        user_id: str = ''
+        time_to_unban: int = 0
+        message: str = ''
+
         # Open and parse data
         with open('data/moderation/unban_times.json', 'r') as file:
             data = json.load(file)
@@ -150,8 +242,8 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
 
         # Iterate through the "temp_banned_users" array and compare times
         for index, entry in enumerate(data.get("temp_banned_users", [])):
-            user_id: str = entry.get("user_id")
-            time_to_unban: int = entry.get("time_to_unban")
+            user_id = entry.get("user_id")
+            time_to_unban = entry.get("time_to_unban")
 
             # Compare the current time with the time in the entry
             if current_timestamp >= time_to_unban:
@@ -176,15 +268,24 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
 
                     # Notify that the user has been unbanned
                     await sendMessage(self.bot, self.bot_output_channel, message)
-                    return logandprint.info(message)
+
+                    # Run cleanup
+                    cleanup(member)
+
+                    # Return with log to console and file
+                    return logandprint.info(message, source='d')
 
                 else:
                     # If the user can't be found, log it to Discord, console, and file
                     message = f'User {member.display_name}\'s temporary ban has expired, but the user could not be found to be unbanned.'
                     await sendMessage(self.bot, self.bot_output_channel, message)
-                    return logandprint.info(message)
+                    return logandprint.warning(message, source='d')
             else:
                 continue
+
+        # Run cleanup
+        cleanup(data, current_timestamp, current_time_unformatted, guild, GUILD_ID, user_id, time_to_unban, message)
+
         return
 
     # Command: Kick
@@ -198,16 +299,28 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
             # Kick the user and log it to #bot-output and to file
             await interaction.response.send_message(f'User {member.display_name} has been kicked from the server.',
                                                     ephemeral=True)
-            message = f'{member.display_name} has been kicked from the server. Reason: "{reason}"'
+            message: str = f'{member.display_name} has been kicked from the server. Reason: "{reason}"'
             await member.kick(reason=reason)
             await sendMessage(self.bot, self.bot_output_channel, message)
-            return log.info(message)
+
+            # Run cleanup
+            cleanup(reason, member, message)
+
+            return log.info(message, source='d')
         except discord.Forbidden:
             await interaction.response.send_message('You don\'t have permission to use this command.', ephemeral=True)
+
+            # Run cleanup
+            cleanup(reason, member)
+
             return
         except discord.HTTPException as e:
             await interaction.response.send_message(f'An error occurred trying to kick user {member}: {e}',
                                                     ephemeral=True)
+
+            # Run cleanup
+            cleanup(reason, member)
+
             return
 
     # Command: Ban
@@ -224,7 +337,7 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
             await sendMessage(self.bot, self.bot_output_channel, message)
             await interaction.response.send_message(f'User `{member.display_name}` was banned from the server.',
                                                     ephemeral=True)
-            return logandprint.info(message)
+            return logandprint.info(message, source='d')
         except discord.HTTPException as e:
             await interaction.response.send_message(f'The following error occurred when trying to ban member {member.mention}: ```{e}```', ephemeral=True)
 
@@ -345,9 +458,14 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
     @app_commands.command(name='reloadblockedwords', description='Reload the list of blocked words.')
     @app_commands.checks.has_permissions(manage_messages=True)
     async def reloadblockedwords(self, interaction: discord.Interaction) -> None:
-        self.blocked_words = loadBlockedWords()
-        await interaction.response.send_message('Blocked words reloaded!', ephemeral=True)
-        return
+        try:
+            self.blocked_words = loadBlockedWords()
+            await interaction.response.send_message('Blocked words reloaded!', ephemeral=True)
+            return logandprint.info(f'User {interaction.user.name} reloaded blocked words list.', source='d')
+        except Exception as e:
+            await interaction.response.send_message('Failed to reload blocked words list with the following error:'
+                                                    f'\n```{e}```', ephemeral=True)
+            return logandprint.error(f'Failed to reload blocked words list with the following error: {e}', source='d')
 
 
 # Cog setup hook

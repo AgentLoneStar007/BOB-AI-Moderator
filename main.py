@@ -31,6 +31,7 @@ custom_status = 'Use "/help" for help.'
 # TODO: Add a system to scan even text files for bad content
 # TODO: Add a system that uses VirusTotal to scan URLs
 # TODO: Check into using latest version of Wavelink
+# TODO: Utilize the new cleanup() function in every place possible
 
 # Init log system
 initLoggingUtility()
@@ -60,13 +61,14 @@ class Bot(commands.Bot):
     # On bot ready...
     async def on_ready(self) -> None:
         # Print a message to the console and log ready event
-        logandprint.info(f'''
-------------------------------
-{self.user.name} is online and ready.
-Bot ID: {self.user.id}
-Custom Status: "{custom_status}"
-------------------------------
+        print(f'''
+\033[32m------------------------------
+\033[36m\033[01m{self.user.name}\033[0m\033[32m is online and ready.
+Bot ID: \033[37m\033[04m{self.user.id}\033[0m\033[32m
+Custom Status: \033[37m\033[04m"{custom_status}"\033[0m\033[32m
+------------------------------\033[0m
 ''')
+        log.info(f'{self.user.name} is online and ready.')
 
         # Change the bots' status
         await self.change_presence(status=discord.Status.online, activity=discord.CustomActivity(custom_status))
@@ -94,18 +96,18 @@ async def run() -> None:
     async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
         # Handler for missing permissions
         if isinstance(error, app_commands.MissingPermissions):
-            logandprint.info(f'User {interaction.user.name} was unable to run command "{interaction.command.name}" due to insufficient permissions.')
+            logandprint.info(f'User {interaction.user.name} was unable to run command "{interaction.command.name}" due to insufficient permissions.', source='d')
             return await interaction.response.send_message('You don\'t have permission to use this command.', ephemeral=True)
 
         if isinstance(error, app_commands.CommandOnCooldown):
-            logandprint.info(f'User {interaction.user.name} was unable to run command "{interaction.command.name}" because it\'s'
-                  ' on cooldown.')
+            logandprint.warning(f'User {interaction.user.name} was unable to run command "{interaction.command.name}" because it\'s'
+                  ' on cooldown.', source='d')
             return await interaction.response.send_message('This command is on cooldown!', ephemeral=True)
 
         # Handler for failing to respond to an interaction quickly enough
         if isinstance(error, discord.app_commands.CommandInvokeError):
             return logandprint.warning(f'Failed to respond to command "{interaction.command.name}" run by'
-                         f'{interaction.user.display_name} because the interaction timed out.')
+                         f' {interaction.user.display_name} because the interaction timed out.', source='d')
 
         # So far no other handlers are required, because AppCommands automatically requires correct argument types
         #  and "CommandNotFound" errors are (to my knowledge) impossible with slash commands.
@@ -114,7 +116,7 @@ async def run() -> None:
         else:
             # Defining the error message as a variable for optimization
             logandprint.error(f'An error occurred when the user {interaction.user.display_name} tried to run the command'
-                              f' {interaction.command.name}: "{type(error)}: {error}"')
+                              f' {interaction.command.name}: "{type(error)}: {error}"', source='d')
             return await interaction.response.send_message(
                 f'An error occurred when trying to run that command:\n```{error}```', ephemeral=True)
 

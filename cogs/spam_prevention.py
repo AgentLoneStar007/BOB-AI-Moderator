@@ -9,7 +9,7 @@ from utils.logger import Log, LogAndPrint
 log = Log()
 logandprint = LogAndPrint()
 
-# TODO: Redo spam prevention system. My ideas are a more "smart" way of preventing spam, and getting less false
+# TODO: Redo spam prevention system. My idea is a more "smart" way of preventing spam, and getting less false
 #  positives by comparing the message author to the author of the last message sent, and adjusting cooldown times more.
 #  (The current system seems like it could have a lot of people getting muted when not spamming.)
 
@@ -41,7 +41,8 @@ class SpamPrevention(commands.Cog, description="Prevents users from sending larg
             #  messages if not handled
             try:
                 del self.user_message_counts_1[user_id]
-            except:
+            except Exception as e:
+                print(e)
                 already_run = True
             if not already_run:
                 self.user_message_counts_2[user_id] = 0

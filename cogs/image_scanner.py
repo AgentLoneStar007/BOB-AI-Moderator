@@ -20,9 +20,14 @@ class ImageScanner(commands.Cog, description="Example cog description."):
     async def on_ready(self) -> None:
         return logandprint.logCogLoad(self.__class__.__name__)
 
-    async def scanImage(self, message: discord.Message) -> None:
+    async def scanImage(self, message: discord.Message) -> bool:
+        logandprint.debug(f'Media: {message.attachments}', source='d')
+
         # Coming soon...
-        return
+
+        # TODO: When image scanner is complete, this function will return True if media passed the test,
+        #  and False otherwise. I'm leaving it statically as True until the system is complete.
+        return True
 
 
 async def setup(bot) -> None:

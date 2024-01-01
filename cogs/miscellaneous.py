@@ -136,15 +136,13 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
             synced = await self.bot.tree.sync()
             # Assign message to variable for efficiency
             message = f'Synced {len(synced)} command(s) with Discord.'
-            print(message)
             await interaction.response.send_message(message, ephemeral=True)
-            return log.info(message)
+            return logandprint.info(message, source='d')
         except Exception as e:
             # More efficiency; log and print the error
             message = f'Failed to sync commands with the following error: {e}'
-            print(message)
             await interaction.response.send_message(message, ephemeral=True)
-            return log.error(message)
+            return logandprint.error(message, source='d')
 
     # Command: Update
     @app_commands.command(name='update', description='Update BOB by pulling latest changes from his Git repository. (Only usable by bot owner.)')

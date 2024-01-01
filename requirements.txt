@@ -3,4 +3,3 @@ python-dotenv
 discord-pretty-help
 wavelink==2.6.4
 vt-py
-tqdm

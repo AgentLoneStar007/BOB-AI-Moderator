@@ -1,9 +1,17 @@
 # Imports
 import os
+from utils.logger import LogAndPrint
+
+# Create object of Log and LogAndPrint class
+logandprint = LogAndPrint()
 
 
-# TODO: Change extension loading system to app-command system
-async def loadExtensions(bot):
+# Load extension/cog function
+async def loadExtensions(bot) -> None:
     for filename in os.listdir("cogs"):
         if filename.endswith(".py"):
-            await bot.load_extension(f'cogs.{filename[:-3]}')
+            try:
+                await bot.load_extension(f'cogs.{filename[:-3]}')
+            except Exception as e:
+                logandprint.error(f'Failed to load cog "{filename[:-3]}" with the following error: {e}')
+    return
