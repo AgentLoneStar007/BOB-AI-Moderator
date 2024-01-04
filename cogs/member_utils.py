@@ -72,10 +72,21 @@ class MemberUtils(commands.Cog, description="Utilities for server members."):
     # he'll probably only ever be on one server, but it's good practice.
     @app_commands.checks.cooldown(1, 300.0, key=lambda i: (i.guild_id, i.user.id))
     async def question(self, interaction: discord.Interaction) -> None:
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
+            return
+
+        # Create the modal(dialogue box) for the user
         question_modal: discord.ui.Modal = QuestionModal()
+
+        # Set the user var
         question_modal.user = interaction.user
+
+        # Send the modal to the user
         await interaction.response.send_modal(question_modal)
-        return log.info(f'{interaction.user.name} started a questionnaire form for staff to answer.')
+
+        # Log the event
+        return log.info(f'{interaction.user.name} started a questionnaire form for staff to answer.', source='d')
 
 
 async def setup(bot) -> None:

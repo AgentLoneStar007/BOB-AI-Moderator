@@ -277,6 +277,13 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
     # Task: Check if connected to voice channel
     @tasks.loop(minutes=5.0)
     async def checkIfConnectedToVoiceChannel(self) -> None:
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
+            for guild in self.bot.guilds:
+                voice_client = guild.voice_client
+                await voice_client.disconnect()
+            return
+
         # Vars
         should_leave = False
 
@@ -316,6 +323,10 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
     # Listener: On Track End
     @commands.Cog.listener()
     async def on_wavelink_track_end(self, payload: wavelink.TrackEventPayload) -> None:
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
+            return
+
         # Create player object
         player: wavelink.Player = payload.player
 
@@ -335,6 +346,10 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
     @app_commands.command(name='play', description='Play a YouTube video in a voice chat. Syntax: "/play <URL or search term>"')
     @app_commands.describe(query='The search term or YouTube video URL to play.')
     async def play(self, interaction: discord.Interaction, *, query: str) -> None:
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
+            return
+
         # Get user VC
         user_vc = interaction.user.voice
 
@@ -503,6 +518,10 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
     # Command: Skip
     @app_commands.command(name='skip', description='Skips to the next song in queue. Stops the player if there are no songs left.')
     async def skip(self, interaction: discord.Interaction) -> None:
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
+            return
+
         # Run checks (is user in vc, is user in same vc as bot, etc.)
         if not await runChecks(interaction):
             return
@@ -538,6 +557,10 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
     # Command: Stop
     @app_commands.command(name='stop', description='Stops the music player and clears the queue.')
     async def stop(self, interaction: discord.Interaction) -> None:
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
+            return
+
         # Run checks
         if not await runChecks(interaction):
             return
@@ -566,6 +589,10 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
     # Command: Pause
     @app_commands.command(name='pause', description='Pauses the player.')
     async def pause(self, interaction: discord.Interaction) -> None:
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
+            return
+
         # Run checks
         if not await runChecks(interaction):
             return
@@ -589,6 +616,10 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
     # Command: Resume
     @app_commands.command(name='resume', description='Resumes the player, if paused.')
     async def resume(self, interaction: discord.Interaction) -> None:
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
+            return
+
         # Run checks
         if not await runChecks(interaction):
             return
@@ -611,6 +642,10 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
     @app_commands.command(name='volume', description='Adjusts the volume of the music player. Syntax: "/volume <volume>"')
     @app_commands.describe(volume='The volume to set the player to.')
     async def volume(self, interaction: discord.Interaction, volume: int) -> None:
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
+            return
+
         # Run checks
         if not await runChecks(interaction, UserInDifferentVCMsg='You can only adjust the volume of the music if you\'re in the same voice channel as me.'):
             return
@@ -635,6 +670,10 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
     @app_commands.command(name='rewind', description='Rewinds the player by a number of seconds. Syntax: "/rewind [seconds to rewind]"')
     @app_commands.describe(rewind_time='The time, in seconds, to rewind.')
     async def rewind(self, interaction: discord.Interaction, rewind_time: int = 10) -> None:
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
+            return
+
         # Run checks
         if not await runChecks(interaction):
             return
@@ -660,7 +699,14 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
     @app_commands.command(name='fastforward', description='Fast-forwards the player by a number of seconds. Syntax: "/fastforward [seconds to fastforward]"')
     @app_commands.describe(fastforward_time='The time, in seconds, to fast-forward.')
     async def fastforward(self, interaction: discord.Interaction, fastforward_time: int = 10) -> None:
-        await runChecks(interaction)
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
+            return
+
+        # Run checks
+        if not await runChecks(interaction):
+            return
+
         # Check if player is running
         player: wavelink.Player = await checkPlayer(interaction)
         if not player:
@@ -688,6 +734,10 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
     @app_commands.command(name='seek', description='Seek to a position in the currently playing track. Syntax: "/seek <position, in format (HH:)MM:SS>"')
     @app_commands.describe(position='The time to seek to in the track.')
     async def seek(self, interaction: discord.Interaction, position: str) -> None:
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
+            return
+
         # Run checks
         if not await runChecks(interaction):
             return
@@ -727,6 +777,10 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
     # Command: Loop
     @app_commands.command(name='loop', description='Loops the currently playing track.')
     async def loop(self, interaction: discord.Interaction):
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
+            return
+
         # Run checks
         if not await runChecks(interaction):
             return
@@ -754,6 +808,10 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
     # Command: PlayerInfo
     @app_commands.command(name='playerinfo', description='Shows information regarding the current track and queue.')
     async def playerinfo(self, interaction: discord.Interaction) -> None:
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
+            return
+
         # Run checks
         if not await runChecks(interaction):
             return
@@ -800,6 +858,10 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
     # Command: QueueInfo
     @app_commands.command(name='queueinfo', description='Shows the current track queue.')
     async def queueinfo(self, interaction: discord.Interaction) -> None:
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
+            return
+
         return await interaction.response.send_message('This command is still a work-in-progress.', ephemeral=True)
 
         # Run checks
@@ -825,6 +887,10 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
     @app_commands.command(name='move', description='Move the bot from one VC to another. Only usable by administrators.')
     @discord.app_commands.checks.has_permissions(move_members=True)
     async def move(self, interaction: discord.Interaction) -> None:
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
+            return
+
         # I'm not using the runChecks function here because the conditions are different
         user_vc = interaction.user.voice
         bot_vc = interaction.guild.voice_client

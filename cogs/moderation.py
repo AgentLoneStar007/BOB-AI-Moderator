@@ -7,8 +7,10 @@ import re
 from datetime import datetime
 from datetime import timedelta
 import json
+import os
+from dotenv import load_dotenv
 from utils.logger import Log, LogAndPrint
-from utils.bot_utils import sendMessage, cleanup
+from utils.bot_utils import sendMessage
 
 # Create object of Log and LogAndPrint class
 log = Log()
@@ -30,11 +32,17 @@ def loadBlockedWords() -> list:
 # TODO: Add an AI-powered image detection system that can detect blocked words in an image and NSFW content
 # TODO: See if the above system can also work with videos, gifs, and so forth.
 # TODO: See if media with audio can be scanned using text-to-speech in order to detect blocked words/phrases.
+# TODO: Add a system that will scan user profile pictures using image detection system
+# TODO: Add the ability for BOB to run a server-wide scan either upon startup or upon request to scan all user statuses
+#  and profile pictures to verify they're not rule-breaking, because if someone updates their profile picture or status
+#  while BOB is offline, he won't detect the change and won't check for blocked words/images.
+# TODO: Add nickname scanning
 
 class Moderation(commands.GroupCog, description='Commands relating to moderation utilities.'):
     # Define vars
+    load_dotenv()
     blocked_words: list = loadBlockedWords()
-    bot_output_channel: str = '1155842466482753656'
+    bot_output_channel: str = os.getenv("BOT_OUTPUT_CHANNEL")
     user_message_counts_1: dict = {}
     user_message_counts_2: dict = {}
     user_message_counts_3: dict = {}
@@ -59,6 +67,10 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
         # Check if message was sent by the bot
         # Using "self.bot.user.id" instead of "is_bot" is an early stage of nuke prevention
         if message.author.id == self.bot.user.id:
+            return
+
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
             return
 
         # Vars
@@ -95,9 +107,6 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
                     "error, please reach out to a moderator.")
                 logandprint.warning(f'User {message.author} sent a message containing a blocked word or phrase '
                                     f'in channel #{message.channel.name}.', source='d')
-
-                # Run cleanup
-                cleanup(original_message_content, attachment_names, message)
 
                 # Stop checking for blocked words after the first word is found
                 return
@@ -137,9 +146,6 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
                             f'User {message.author.name} sent a message with an attached file that had a name '
                             f'containing a blocked word or phrase in channel "{message.channel.name}."', source='d')
 
-                        # Run cleanup
-                        cleanup(attachment_names, blocked_name, message, notify_message)
-
                         # Stop checking
                         return
 
@@ -160,24 +166,16 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
                 if not await image_scanner_cog_instance.scanImage(message):
                     return
 
-            logandprint.debug('Prevented scan of files due to file scanner system not being complete.', source='d')
-
             # Third scan: Scan files for viruses
-            #file_scanner_cog_instance = self.bot.get_cog('FileScanner')
-            #if file_scanner_cog_instance:
-            #    if not await file_scanner_cog_instance.scanAttachedFiles(message):
-            #        return
-
-            # Cleanup
-            #cleanup(image_scanner_cog_instance, file_scanner_cog_instance)
+            file_scanner_cog_instance = self.bot.get_cog('FileScanner')
+            if file_scanner_cog_instance:
+                if not await file_scanner_cog_instance.scanAttachedFiles(message):
+                    return
 
         # Fourth scan: Prevent spamming
         spam_prevention_cog_instance = self.bot.get_cog('SpamPrevention')
         if spam_prevention_cog_instance:
             await spam_prevention_cog_instance.checkForSpam(message)
-
-        # Cleanup
-        cleanup(spam_prevention_cog_instance)
 
         return
 
@@ -187,6 +185,10 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
     async def on_presence_update(self, before, after) -> None:
         # Ignore updates from bots
         if before.bot:
+            return
+
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
             return
 
         # Check user status to see if it's changed
@@ -212,9 +214,6 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
                     # Stop checking for blocked words after the first word is found
                     break
 
-            # Run cleanup
-            cleanup(user_status)
-
             # Return if no bad words found
             return
         # Return if status is unchanged
@@ -223,10 +222,9 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
     # Task: Check for users needing to be unbanned
     @tasks.loop(minutes=2.0)
     async def checkForNeededUnbans(self) -> None:
-        # Vars
-        user_id: str = ''
-        time_to_unban: int = 0
-        message: str = ''
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
+            return
 
         # Open and parse data
         with open('data/moderation/unban_times.json', 'r') as file:
@@ -242,8 +240,8 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
 
         # Iterate through the "temp_banned_users" array and compare times
         for index, entry in enumerate(data.get("temp_banned_users", [])):
-            user_id = entry.get("user_id")
-            time_to_unban = entry.get("time_to_unban")
+            user_id: str = entry.get("user_id")
+            time_to_unban: int = entry.get("time_to_unban")
 
             # Compare the current time with the time in the entry
             if current_timestamp >= time_to_unban:
@@ -252,7 +250,7 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
 
                 if member:
                     # Try to unban the user
-                    message = f'User {member.display_name} was unbanned because their temporary ban expired.'
+                    message: str = f'User {member.display_name} was unbanned because their temporary ban expired.'
 
                     try:
                         await guild.unban(member, reason='Temporary ban on user expired.')
@@ -269,9 +267,6 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
                     # Notify that the user has been unbanned
                     await sendMessage(self.bot, self.bot_output_channel, message)
 
-                    # Run cleanup
-                    cleanup(member)
-
                     # Return with log to console and file
                     return logandprint.info(message, source='d')
 
@@ -283,9 +278,6 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
             else:
                 continue
 
-        # Run cleanup
-        cleanup(data, current_timestamp, current_time_unformatted, guild, GUILD_ID, user_id, time_to_unban, message)
-
         return
 
     # Command: Kick
@@ -295,6 +287,10 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
     @discord.app_commands.checks.has_permissions(kick_members=True)
     async def kick(self, interaction: discord.Interaction, member: discord.Member, *,
                    reason: str = "No reason was provided.") -> None:
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
+            return
+
         try:
             # Kick the user and log it to #bot-output and to file
             await interaction.response.send_message(f'User {member.display_name} has been kicked from the server.',
@@ -303,23 +299,14 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
             await member.kick(reason=reason)
             await sendMessage(self.bot, self.bot_output_channel, message)
 
-            # Run cleanup
-            cleanup(reason, member, message)
-
             return log.info(message, source='d')
         except discord.Forbidden:
             await interaction.response.send_message('You don\'t have permission to use this command.', ephemeral=True)
-
-            # Run cleanup
-            cleanup(reason, member)
 
             return
         except discord.HTTPException as e:
             await interaction.response.send_message(f'An error occurred trying to kick user {member}: {e}',
                                                     ephemeral=True)
-
-            # Run cleanup
-            cleanup(reason, member)
 
             return
 
@@ -330,6 +317,10 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
     @app_commands.checks.has_permissions(kick_members=True)
     async def ban(self, interaction: discord.Interaction, member: discord.Member, *,
                   reason: str = 'No reason was provided.') -> None:
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
+            return
+
         try:
             # Ban the user and log it to #bot-output and to file
             message = f'{member.display_name}(ID: {member.id}) has been banned from the server. Reason: "{reason}"'
@@ -352,6 +343,9 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
     @app_commands.checks.has_permissions(ban_members=True)
     async def tempban(self, interaction: discord.Interaction, member: discord.Member, duration: int, *,
                       reason: str = "") -> None:
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
+            return
 
         # Get the current time in UTC, get the time that it will be to unban the user, and format it to a string
         current_time = datetime.utcnow()
@@ -398,6 +392,10 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
     @app_commands.describe(user_id='The ID of the user to unban.')
     @app_commands.checks.has_permissions(ban_members=True)
     async def unban(self, interaction: discord.Interaction, user_id: str) -> None:
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
+            return
+
         # Check if user ID is all numbers, and is equal to 18 characters
         message = f'`{user_id}` is an invalid user ID. User IDs are a string of 18 digits.'
         if not user_id.isdigit():
@@ -430,6 +428,10 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
     @app_commands.describe(amount='The amount of messages to be deleted.')
     @app_commands.checks.has_permissions(manage_messages=True)
     async def purge(self, interaction: discord.Interaction, amount: int) -> None:
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
+            return
+
         # Check if the specified amount is within the allowed range
         if 1 <= amount <= 100:
             logMessage = f'User {interaction.user} purged {amount} message(s) from channel "{interaction.channel}."'
@@ -458,6 +460,10 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
     @app_commands.command(name='reloadblockedwords', description='Reload the list of blocked words.')
     @app_commands.checks.has_permissions(manage_messages=True)
     async def reloadblockedwords(self, interaction: discord.Interaction) -> None:
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
+            return
+
         try:
             self.blocked_words = loadBlockedWords()
             await interaction.response.send_message('Blocked words reloaded!', ephemeral=True)

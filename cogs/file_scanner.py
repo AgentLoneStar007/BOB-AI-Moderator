@@ -31,6 +31,7 @@ class FileScanner(commands.Cog, description="Example cog description."):
     #  prevent duplicate scans or skipped files being scanned
 
     # Vars
+    # TODO: Re-add .txt to this list
     ingnorable_file_extensions: list = ['.jpg', '.png', '.jpeg', '.mp4', '.mp3', '.avi', '.mkv', '.webm', '.gif', '.ico', '.bmp', '.tiff', '.ttf', '.otf', '.csv', '.xml', '.log', '.json', '.docx', '.xlsx', '.pptx']
     unscannable_file_extensions: list = ['.iso', '.zip', '.tar', '.gz', '.bz2', '.xz', '.rar', '.7z', '.tgz', '.tbz2', '.cab', '.zipx', '.img', '.gz']
     uploaded_files: int
@@ -62,12 +63,14 @@ class FileScanner(commands.Cog, description="Example cog description."):
             for x in self.ingnorable_file_extensions:
                 if attachment.filename.endswith(x):
                     should_continue = True
+                    break
 
             # Also check for any files with an un-scan-able extension type, and add the filenames to a list
             for x in self.unscannable_file_extensions:
                 if attachment.filename.endswith(x):
                     unscannable_message_attachments.append(attachment.filename)
                     should_continue = True
+                    break
 
             # If the should_continue var is True, continue
             if should_continue:
@@ -78,18 +81,16 @@ class FileScanner(commands.Cog, description="Example cog description."):
 
         # If both lists are empty, all attachments are ignored file extensions
         if not message_attachments and not unscannable_message_attachments:
-            return
+            return True
 
         # If there are no scan-able message attachments, notify users that the files cannot be verified
         if not message_attachments:
             await message.reply(content='I cannot scan some or all of the attached files, so I cannot verify if'
                                         ' they are safe or not. Download at your own risk.')
-            return
+            return True
 
         # Log the download of the files to console and logfile
-        download_log_message: str = f'Downloading {len(message_attachments)} files for scanning...'
-        print(download_log_message)
-        log.info(download_log_message)
+        logandprint.info(f'Downloading {len(message_attachments)} files for scanning...', source='d')
 
         # For every attachment in the list
         for attachment in message_attachments:
@@ -104,6 +105,8 @@ class FileScanner(commands.Cog, description="Example cog description."):
             # Get the file's total size, in bytes
             total_size = len(file_content)
 
+            # TODO: Remove the progress bar because I don't think it works and it's stupid
+
             # Download the file, showing a progress bar(which may or may not work)
             with tqdm(total=total_size, desc=f"Downloading {attachment.filename}", unit_scale=True) as progress_bar:
                 # Save the file content to the specified file
@@ -113,12 +116,7 @@ class FileScanner(commands.Cog, description="Example cog description."):
                         progress_bar.update(len(chunk))
 
         # Announce downloaded files in console and log it to file
-        log_message = f'Downloaded {len(message_attachments)} files for scanning from message by user "{message.author.name}" in channel {message.channel.name}.'
-        print(log_message)
-        log.info(log_message)
-
-        # Get the text content of the message. If there's no text, set message_text to equal None
-        message_text: str = message.content if message.content else None
+        logandprint.info(f'Downloaded {len(message_attachments)} files for scanning from message by user "{message.author.name}" in channel #{message.channel.name}.', source='d')
 
         # And notify the sender of file scanning
         notify_message: str = (f'{message.author.mention}, your files have been downloaded and are now being '
@@ -130,28 +128,18 @@ class FileScanner(commands.Cog, description="Example cog description."):
             # Apparently Python 3.11 doesn't allow backslash characters inside f-strings, so I have to do this
             newline_char: str = '\n'
             # Add to the notifying message, and use join() to print every item in the unscannable files list
-            notify_message = notify_message + (f'\n\nThe following files are unscannable and will be skipped. I '
+            notify_message = notify_message + ('\n\nThe following files are unscannable and will be skipped. I '
                                                f'cannot verify if they are safe.\n```{f"{newline_char}".join(unscannable_message_attachments)}```')
-            del newline_char
-
-        # If there was text attached to the original message, attach it to the notifying message
-        if message_text:
-            # If the message was greater than 1,800 characters, cut off the last 200 characters(giving wiggle room
-            # for the @mention in the notifying message, because the length of the name can't be determined),
-            # and put triple-dots at the end. (It probably can be determined; I just don't care.)
-            if len(message_text) > 1700:
-                message_text = message_text[:-300] + '...'
-
-            # Update the notify message accordingly
-            notify_message = notify_message + f'\n\n**Original Message:**\n{message_text}'
-
-        # Delete the original message
-        await message.delete()
 
         # Send the notifying message in the channel
-        await message.channel.send(notify_message)
+        await message.reply(content=notify_message)
 
         # TODO: Build the actual file scanner
+
+
+
+        # Hard-setting this to True until the file scanner is complete
+        return True
 
 
 async def setup(bot) -> None:

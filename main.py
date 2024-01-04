@@ -1,13 +1,12 @@
 ## BOB-AI-Moderator
 ## A Discord bot made in Python using Discord.py, by AgentLoneStar007
 ## https://github.com/AgentLoneStar007
-
-
+import aiohttp.client_exceptions
 # Imports
 import discord
 import pretty_help
 from discord import app_commands
-from discord.ext import commands
+from discord.ext import commands, tasks
 from pretty_help import PrettyHelp
 import wavelink
 from dotenv import load_dotenv
@@ -15,12 +14,13 @@ import asyncio
 import os
 from utils.load_extensions import loadExtensions
 from utils.logger import Log, LogAndPrint, initLoggingUtility
-from utils.bot_utils import defIntents
+from utils.bot_utils import defIntents, sendMessage
 
 # Vars
 load_dotenv()
 BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 OWNER_ID = int(os.getenv("BOT_OWNER_ID"))
+BOT_OUTPUT_CHANNEL = os.getenv("BOT_OUTPUT_CHANNEL")
 WAVELINK_PASSWORD = os.getenv("WAVELINK_PASSWORD")
 custom_status = 'Use "/help" for help.'
 
@@ -58,6 +58,10 @@ class Bot(commands.Bot):
 
             ))
 
+        # Set maintenance mode var
+        self.maintenance_mode: bool = False
+        self.already_sent_maintenance_mode_notify = False
+
     # On bot ready...
     async def on_ready(self) -> None:
         # Print a message to the console and log ready event
@@ -73,6 +77,10 @@ Custom Status: \033[37m\033[04m"{custom_status}"\033[0m\033[32m
         # Change the bots' status
         await self.change_presence(status=discord.Status.online, activity=discord.CustomActivity(custom_status))
 
+        # Activate background task
+        self.checkIfMaintenanceModeActive.start()
+        return logandprint.info('Started background task "Check If Maintenance Mode is Active."')
+
     # Create setup hook for Wavelink music player
     async def setup_hook(self) -> None:
         node: wavelink.Node = wavelink.Node(uri='http://localhost:2333', password=WAVELINK_PASSWORD)
@@ -83,6 +91,48 @@ Custom Status: \033[37m\033[04m"{custom_status}"\033[0m\033[32m
         message = ('I don\'t support regular bot commands. Instead, I use Discord\'s built-in app commands! Use '
                    '`/help` for a list of available commands.')
         return await ctx.send(message)
+
+    # Task: Check if maintenance mode is active
+    @tasks.loop(seconds=3)
+    async def checkIfMaintenanceModeActive(self) -> None:
+        # If maintenance mode is active,
+        if self.maintenance_mode:
+            # Disconnect from all voice channels
+            for guild in self.guilds:
+                voice_client = guild.voice_client
+                if voice_client:
+                    await voice_client.disconnect(force=True)
+
+            # Update the bots' status
+            await self.change_presence(status=discord.Status.do_not_disturb, activity=discord.CustomActivity(
+                'MAINTENANCE MODE ACTIVE'))
+
+            # Send a notifying message to staff
+            if not self.already_sent_maintenance_mode_notify:
+                logandprint.warning('MAINTENANCE MODE IS ACTIVE!')
+
+                await sendMessage(self, BOT_OUTPUT_CHANNEL, 'MAINTENANCE MODE ACTIVATED! All moderation systems'
+                                                            ' and utilities are offline!')
+                # Update this variable to prevent sending the message multiple times
+                self.already_sent_maintenance_mode_notify = True
+
+            return
+
+        # If maintenance mode is off,
+        if not self.maintenance_mode:
+            # Get the bot as a member of a guild object(the following wouldn't work if the bot were in multiple servers)
+            bot_member = self.guilds[0].get_member(self.user.id)
+
+            if bot_member:
+                # If the status is not online,
+                if str(bot_member.status) != 'online':
+                    # Update it to online
+                    await self.change_presence(status=discord.Status.online, activity=discord.CustomActivity(custom_status))
+
+                    # Log that maintenance mode is no longer active
+                    logandprint.info('Maintenance mode is no longer active.')
+
+        return
 
 
 # Main program function
@@ -132,5 +182,8 @@ if __name__ == "__main__":
         asyncio.run(run())
     except KeyboardInterrupt:
         logandprint.info('Shutting down!')
+    except aiohttp.client_exceptions.ClientConnectorError:
+        logandprint.fatal(f'B.O.B was unable to connect to either the Internet or Discord.')
     except Exception as e:
         logandprint.fatal(f'B.O.B encountered a critical error and had to shut down! Error: {e}')
+

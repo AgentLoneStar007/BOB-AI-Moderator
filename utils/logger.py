@@ -2,21 +2,14 @@
 from datetime import datetime
 import os
 
-# TODO: Add returns on functions in these miscellaneous function files
+# TODO: Add error handling for when current.txt is deleted or log folder is read-only or stuff like that
 
 # Vars
 logFolder = 'logs'
 
 
-def formatInput(typeInput) -> str:
-    if typeInput == 'WARN':
-        return 'WARNING'
-    if typeInput == 'ERR':
-        return 'ERROR'
-    else:
-        return 'INFO'
-
-
+# Function that, when used, will create a text file containing the name of the log file to log to during program
+# lifecycle
 def initLoggingUtility() -> None:
     # If there is not a logs folder, create it
     if not os.path.exists(logFolder):
@@ -50,6 +43,7 @@ def initLoggingUtility() -> None:
     return
 
 
+# Log class, containing all the different log types
 class Log:
     # For all log types, the source can either be "s" for SYSTEM or "d" for DISCORD
     def info(self, message: str, source: str = 'S') -> None:
@@ -134,6 +128,7 @@ class Log:
 
     # Currently not defining a "fatal" log function because I don't think it's required outside LogAndPrint
 
+    # Two shortcut log functions, which will log cog loads and command usages
     def logCommand(self, user, command) -> None:
         # Log the command
         self.info(f'{user} ran command "{command}."', source='d')
@@ -152,7 +147,7 @@ class LogAndPrint:
     # Create object of Log class
     log = Log()
 
-    def info(self, message: str, source: str = 'S'):
+    def info(self, message: str, source: str = 'S') -> None:
         # Get/set source type
         if source.lower().startswith('d'):
             source = 'DISCORD'
@@ -167,7 +162,9 @@ class LogAndPrint:
         print(f'{currentTime} ({source}) <INFO>: {message}')
         self.log.info(message, source=source)
 
-    def warning(self, message: str, source: str = 'S'):
+        return
+
+    def warning(self, message: str, source: str = 'S') -> None:
         # Get/set source type
         if source.lower().startswith('d'):
             source = 'DISCORD'
@@ -182,7 +179,9 @@ class LogAndPrint:
         print(f'\033[93m{currentTime} ({source}) <WARNING>: {message}\033[0m')
         self.log.warning(message, source=source)
 
-    def error(self, message: str, source: str = 'S'):
+        return
+
+    def error(self, message: str, source: str = 'S') -> None:
         # Get/set source type
         if source.lower().startswith('d'):
             source = 'DISCORD'
@@ -197,8 +196,10 @@ class LogAndPrint:
         print(f'\033[91m{currentTime} ({source}) <ERROR>: {message}\033[0m')
         self.log.error(message, source=source)
 
+        return
+
     # No need to specify source type because all fatal errors will be SYSTEM
-    def fatal(self, message: str):
+    def fatal(self, message: str) -> None:
         # Create current time var
         now = datetime.now()
         currentTime: str = now.strftime('[%m/%d/%Y-%H:%M:%S]')
@@ -207,7 +208,9 @@ class LogAndPrint:
         print(f'\033[31m{currentTime} (SYSTEM) <FATAL>: {message}\033[0m')
         self.log.error(message)
 
-    def debug(self, message: str, source: str = 'S'):
+        return
+
+    def debug(self, message: str, source: str = 'S') -> None:
         # Get/set source type
         if source.lower().startswith('d'):
             source = 'DISCORD'
@@ -221,6 +224,8 @@ class LogAndPrint:
         # Print the message and log it to file
         print(f'\033[37m{currentTime} ({source}) <DEBUG>: {message}\033[0m')
         self.log.debug(message, source=source)
+
+        return
 
     def logCogLoad(self, cog) -> None:
         # Create current time var

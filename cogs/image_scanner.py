@@ -1,9 +1,7 @@
 # Imports
 import discord
-from discord import app_commands
 from discord.ext import commands
 from utils.logger import Log, LogAndPrint
-from utils.bot_utils import checkIfOwner
 
 # Create object of Log and LogAndPrint class
 log = Log()
@@ -21,8 +19,6 @@ class ImageScanner(commands.Cog, description="Example cog description."):
         return logandprint.logCogLoad(self.__class__.__name__)
 
     async def scanImage(self, message: discord.Message) -> bool:
-        logandprint.debug(f'Media: {message.attachments}', source='d')
-
         # Coming soon...
 
         # TODO: When image scanner is complete, this function will return True if media passed the test,

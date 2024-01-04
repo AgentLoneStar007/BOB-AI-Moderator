@@ -1,7 +1,14 @@
 # Imports
+import asyncio
+
 import discord
 from discord import app_commands
 from discord.ext import commands
+import os
+from dotenv import load_dotenv
+import shutil
+import subprocess
+from asyncio import sleep
 from utils.logger import Log, LogAndPrint
 from utils.bot_utils import checkIfOwner
 
@@ -10,6 +17,10 @@ from utils.bot_utils import checkIfOwner
 # Create object of Log and LogAndPrint class
 log = Log()
 logandprint = LogAndPrint()
+
+# Vars
+load_dotenv()
+GITHUB_REPO_URL = os.getenv("GITHUB_REPO_URL")
 
 
 class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
@@ -151,7 +162,67 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
         if not await checkIfOwner(interaction):
             return
 
-        await interaction.response.send_message('This feature is coming soon!', ephemeral=True)
+        #return await interaction.response.send_message('This feature is a work-in-progress!', ephemeral=True)
+
+        already_sent_message: bool = False
+
+        try:
+            discord_log: str = 'Started a system update. Please wait...'
+
+            # Send a notifying message
+            await interaction.response.send_message('Started a system update. Please wait...', ephemeral=True)
+            # This is here for error handling, as seen below in the Except
+            already_sent_message = True
+
+            # Log system update
+            logandprint.info('Starting system update...')
+
+            # Create folder to store update files
+            os.mkdir('data/update_files/root')
+
+            # Notify of download
+            discord_log = discord_log + '\nDownloading update files...'
+            await interaction.edit_original_response(content=discord_log)
+
+            # Start download
+            try:
+                logandprint.debug('Started download of update files...')
+                subprocess.run(['git', 'clone', GITHUB_REPO_URL, 'data/update_files/root'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+            except subprocess.CalledProcessError as e:
+                logandprint.error(f'The following error occurred during the download of the update files: {e}')
+                discord_log = discord_log + f'The following error occurred during the download of the update files: ```{e}```For safety reasons, the update will not continue. Please update manually.'
+                await interaction.edit_original_response(content=discord_log)
+                return
+
+            # Zip update files into an archive
+            shutil.make_archive('data/update_files/update', 'zip', 'data/update_files/root')
+
+            # Update message to notify download is done
+            logandprint.debug('Download complete. Starting upgrade...')
+
+            # Activate maintenance mode
+            self.bot.maintenance_mode = True
+
+            # Wait three seconds to make sure the maintenance mode check background task runs before the bot is updated
+            await asyncio.sleep(3)
+
+            # Update Discord message
+            discord_log = discord_log + '\nDownload complete. Starting system upgrade...'
+            await interaction.edit_original_response(content=discord_log)
+
+        except Exception as e:
+            message: str = f'The following error occurred when attempting to update: {e}'
+            if already_sent_message:
+                # If a message has already been sent, update it
+                await interaction.edit_original_response(content=message)
+            else:
+                # Otherwise, send a new message
+                await interaction.response.send_message(message, ephemeral=True)
+
+        finally:
+            # Clean up temporary files
+            shutil.rmtree('data/update_files/root', ignore_errors=True)
+            logandprint.debug('Cleaned')
 
         return
 
