@@ -162,4 +162,5 @@ cython_debug/
 # Custom
 logs/*
 data/moderation/*
+data/update_files/*
 downloads/*

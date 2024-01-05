@@ -14,6 +14,8 @@ logandprint = LogAndPrint()
 load_dotenv()
 QUESTION_CHANNEL_ID: int = int(os.getenv("QUESTION_CHANNEL_ID"))
 
+# TODO: Add/finish reaction image system
+
 
 # Modal(pop-up text input box) class
 class QuestionModal(discord.ui.Modal, title='Question for Staff'):
@@ -51,7 +53,7 @@ class QuestionModal(discord.ui.Modal, title='Question for Staff'):
     async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
         await interaction.response.send_message('The following error occurred when trying to submit your form: '
                                                  f'{error}', ephemeral=True)
-        return log.error(f'An error occurred when user {interaction.user.name} tried to submit a question.')
+        return log.error(f'An error occurred when user {interaction.user.name} tried to submit a question.', source='d')
 
 
 class MemberUtils(commands.Cog, description="Utilities for server members."):
@@ -67,9 +69,9 @@ class MemberUtils(commands.Cog, description="Utilities for server members."):
     # Command: Question
     @app_commands.command(name='question', description='Leave a question for the server staff to answer.')
     # By specifying i.guid_id and i.user.id, it's a member cooldown, meaning that a member in a server can use the
-    # command, go on cooldown, but go to another server and use the command. In other words, the cooldown is
-    # guild-specific, and not bot-wide, if the bot is on multiple servers. This is unnecessary for this bot because
-    # he'll probably only ever be on one server, but it's good practice.
+    # command, go on cooldown, but go to another server that the bot is in and use the command. In other words, the
+    # cooldown is guild-specific, and not bot-wide, if the bot is on multiple servers. This is unnecessary for this
+    # bot because he'll probably only ever be on one server, but it's good practice.
     @app_commands.checks.cooldown(1, 300.0, key=lambda i: (i.guild_id, i.user.id))
     async def question(self, interaction: discord.Interaction) -> None:
         # Check if maintenance mode is on
@@ -87,6 +89,15 @@ class MemberUtils(commands.Cog, description="Utilities for server members."):
 
         # Log the event
         return log.info(f'{interaction.user.name} started a questionnaire form for staff to answer.', source='d')
+
+    @app_commands.command(name='reaction', description='Choose a reaction image from a list. Like advanced emojis.')
+    @app_commands.checks.cooldown(1, 5.0, key=lambda i: (i.guild_id, i.user.id))
+    async def reaction(self, interaction: discord.Interaction) -> None:
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
+            return
+
+        return await interaction.response.send_message('This feature is coming soon!', ephemeral=True)
 
 
 async def setup(bot) -> None:

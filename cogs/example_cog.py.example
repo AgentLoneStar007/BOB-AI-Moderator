@@ -23,6 +23,10 @@ class ExampleCog(commands.Cog, description="Example cog description."):
     # Example command
     @app_commands.command(name='example', description='This is an example for a command description.')
     async def example(self, interaction: discord.Interaction) -> None:
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
+            return
+
         await interaction.response.send_message("This is an example cog!", ephemeral=True)
         return log.logCommand(interaction.user, interaction.command.name)
 
