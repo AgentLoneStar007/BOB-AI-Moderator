@@ -17,13 +17,25 @@ log = Log()
 logandprint = LogAndPrint()
 
 
+# Function to load blocked words from file
 def loadBlockedWords() -> list:
     with open('data/moderation/blocked_words.txt', 'r') as file:
         lines = file.readlines()
         # ha ha spaghetti code go brrrr
         blocked_words = [line.strip().replace(' ', '').lower() for line in lines]
         file.close()
+
     return blocked_words
+
+
+# TODO: Add handling if the last item in the blocked words list already has a newline character
+def exportBlockedWord(word: str) -> None:
+    blocked_words: list = loadBlockedWords()
+    with open('data/moderation/blocked_words.txt', 'a') as file:
+        file.write('\n' + word)
+        file.close()
+
+    return
 
 
 # TODO: Add cool-downs to commands to prevent spamming(which may or may not work)
@@ -172,7 +184,7 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
                 if not await file_scanner_cog_instance.scanAttachedFiles(message):
                     return
 
-        # Fourth scan: Prevent spamming
+        # Fourth scan: Spam prevention
         spam_prevention_cog_instance = self.bot.get_cog('SpamPrevention')
         if spam_prevention_cog_instance:
             await spam_prevention_cog_instance.checkForSpam(message)
@@ -457,7 +469,7 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
             return
 
     # Command: ReloadBlockedWords
-    @app_commands.command(name='reloadblockedwords', description='Reload the list of blocked words.')
+    @app_commands.command(name='reloadblockedwords', description='Reload the list of blocked words. (Only usable by staff.)')
     @app_commands.checks.has_permissions(manage_messages=True)
     async def reloadblockedwords(self, interaction: discord.Interaction) -> None:
         # Check if maintenance mode is on
@@ -472,6 +484,38 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
             await interaction.response.send_message('Failed to reload blocked words list with the following error:'
                                                     f'\n```{e}```', ephemeral=True)
             return logandprint.error(f'Failed to reload blocked words list with the following error: {e}', source='d')
+
+    @app_commands.command(name='addblockedword', description='Add a blocked word or phrase to the blocked words list. (Only usable by staff.)')
+    @app_commands.checks.has_permissions(manage_messages=True)
+    async def addblockedword(self, interaction: discord.Interaction, blocked_word: str) -> None:
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
+            return
+
+        try:
+            # Add the word to the list
+            exportBlockedWord(blocked_word)
+
+            # Reload blocked words
+            self.blocked_words = loadBlockedWords()
+
+            # Notify of success
+            await interaction.response.send_message(f'Added ||{blocked_word}|| to blocklist.', ephemeral=True)
+
+            # Censor the blocked word or phrase for logging
+            if len(blocked_word) < 2:
+                censored_blocked_word: str = blocked_word
+            else:
+                censored_blocked_word: str = blocked_word[0] + '*' * (len(blocked_word) - 2) + blocked_word[-1]
+
+            # Log and print the word being added
+            log.debug(f'Added word "{blocked_word}" to blocked words list.', source='d')
+            return logandprint.info(f'User {interaction.user} added word "{censored_blocked_word}" to blocked '
+                                    f'words list.', source='d')
+
+        except Exception as e:
+            await interaction.response.send_message(f'The following error occurred when trying to add to the blocked words list: ```{e}```', ephemeral=True)
+            return logandprint.error(f'The following error occurred when user {interaction.user.name} tried to add to the blocked words list: {e}', source='d')
 
 
 # Cog setup hook

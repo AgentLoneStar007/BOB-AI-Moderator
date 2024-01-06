@@ -163,4 +163,5 @@ cython_debug/
 logs/*
 data/moderation/*
 data/update_files/*
+data/reaction_images/*
 downloads/*
