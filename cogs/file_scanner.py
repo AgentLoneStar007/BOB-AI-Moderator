@@ -5,26 +5,40 @@ from utils.logger import Log, LogAndPrint
 import vt
 from dotenv import load_dotenv
 import os
-from tqdm import tqdm
-import io
+import hashlib
 
 # TODO: Instead of setting a hard limit on file sizes or message attachments, I'll instead pull a Google Drive
 #  and just warn that the files have not been scanned if they're too large
 # TODO: Don't forget to add a system that cleans the download folder after the files are deemed safe and re-uploaded
+# TODO: Add a system that stores the totals of how many files have been scanned per minute, day, month, etc. in order
+#  to prevent exceeding the free API limits. Also make that system reset those counts when needed.
 
 # Vars
 load_dotenv()
-VIRUS_TOTAL_API_KEY = os.getenv("VIRUS_TOTAL_API_KEY")
+VIRUS_TOTAL_API_KEY: str = os.getenv("VIRUS_TOTAL_API_KEY")
 
 # Create object of Log and LogAndPrint class
 log = Log()
 logandprint = LogAndPrint()
 
 
+# Function to compute the SHA-256 of a file
+def computeSHA256(file_path) -> str:
+    sha256 = hashlib.sha256()
+
+    with open(file_path, "rb") as file:
+        # Read the file in chunks to handle large files
+        for chunk in iter(lambda: file.read(4096), b""):
+            sha256.update(chunk)
+
+    return sha256.hexdigest()
+
+
 class FileScanner(commands.Cog, description="Example cog description."):
     def __init__(self, bot) -> None:
         self.bot = bot
         self.client = vt.Client(VIRUS_TOTAL_API_KEY)
+        print(self.client)
         return
 
     # TODO: Make sure the ignorable_file_extensions list lines up with the list that will be in the image scanner to
@@ -44,8 +58,6 @@ class FileScanner(commands.Cog, description="Example cog description."):
 
     # File scanner function
     async def scanAttachedFiles(self, message: discord.Message) -> bool:
-        # TODO: Redesign the file scanner to be compatible with the rest of the scanners
-
         # Create a list of all files that will need to be downloaded
         message_attachments: list = []
         # And create a list of all files that cannot be scanned
@@ -92,31 +104,33 @@ class FileScanner(commands.Cog, description="Example cog description."):
         # Log the download of the files to console and logfile
         logandprint.info(f'Downloading {len(message_attachments)} files for scanning...', source='d')
 
-        # For every attachment in the list
+        # Create a count variable
+        current_file_index: int = 0
+
+        # Create download directory variable, to prevent issues
+        download_directory: str = ''
+
+        # For every attachment in the list,
         for attachment in message_attachments:
             # Get the file's contents
             file_content: bytes = await attachment.read()
-            # Set the download directory, which is the download directory, then the message ID as the directory name
-            download_directory = f'./downloads/{str(message.id)}'
+            # Set the download directory, which is the download directory, then the message ID as the subdirectory name
+            download_directory = f'downloads/{str(message.id)}'
             os.mkdir(download_directory)
-            filename = f'{download_directory}/{attachment.filename}'
-            # Get the file's data
-            file_stream: io.BytesIO = io.BytesIO(file_content)
-            # Get the file's total size, in bytes
-            total_size = len(file_content)
+            file_path = f'{download_directory}/{attachment.filename}'
 
-            # TODO: Remove the progress bar because I don't think it works and it's stupid
+            # Download the file
+            with open(file_path, "wb") as file:
+                file.write(file_content)
 
-            # Download the file, showing a progress bar(which may or may not work)
-            with tqdm(total=total_size, desc=f"Downloading {attachment.filename}", unit_scale=True) as progress_bar:
-                # Save the file content to the specified file
-                with open(filename, "wb") as file:
-                    for chunk in iter(lambda: file_stream.read(4096), b""):
-                        file.write(chunk)
-                        progress_bar.update(len(chunk))
+            # Increment the count by one
+            current_file_index += 1
+
+            logandprint.debug(f'Finished download of file {current_file_index} of {len(message_attachments)}.')
 
         # Announce downloaded files in console and log it to file
-        logandprint.info(f'Downloaded {len(message_attachments)} files for scanning from message by user "{message.author.name}" in channel #{message.channel.name}.', source='d')
+        logandprint.info(f'Finished downloading {len(message_attachments)} files for scanning from a message '
+                         f'sent by the user "{message.author.name}" in channel #{message.channel.name}.', source='d')
 
         # And notify the sender of file scanning
         notify_message: str = (f'{message.author.mention}, your files have been downloaded and are now being '
@@ -136,6 +150,30 @@ class FileScanner(commands.Cog, description="Example cog description."):
 
         # TODO: Build the actual file scanner
 
+        for download in os.listdir(download_directory):
+            file_hash = computeSHA256(f'{download_directory}/{download}')
+
+            try:
+                print('good till here')
+                file_report = await self.client.get_object_async(file_hash)
+                if file_report is None:
+                    print('no reports')
+                    break
+
+                print('good till here 2')
+                if file_report.attributes.get('last_analysis_stats', {}).get('malicious') > 0:
+                    print(f"The file with SHA-256 hash {file_hash} is malicious.")
+                else:
+                    print(f"The file with SHA-256 hash {file_hash} is not flagged as malicious.")
+            except vt.error.APIError as e:
+                logandprint.error(f'{e}')
+            except Exception as e:
+                logandprint.error(f'Error: {e}')
+
+            print('test')
+
+        # Close the client connection, to prevent errors.
+        await self.client.close()
 
 
         # Hard-setting this to True until the file scanner is complete

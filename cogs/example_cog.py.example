@@ -2,12 +2,13 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-from utils.logger import Log, logCommand, logCogLoad
-from utils.bot_utils import checkIfOwner
+from utils.logger import Log, LogAndPrint
+from utils.bot_utils import checkIfOwner, sendMessage
 
 # Create object of Log and LogAndPrint class
 log = Log()
 logandprint = LogAndPrint()
+
 
 # Example cog class
 class ExampleCog(commands.Cog, description="Example cog description."):

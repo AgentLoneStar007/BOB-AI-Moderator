@@ -36,6 +36,10 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
     # Command: Info
     @app_commands.command(name='info', description='Provide a list of information regarding B.O.B.')
     async def info(self, interaction: discord.Interaction) -> None:
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
+            return
+
         creation_timestamp = int(self.bot.user.created_at.timestamp())
         info_embed = discord.Embed(
             title='B.O.B Info',
@@ -55,8 +59,12 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
     @app_commands.command(name='load', description='Load a cog. (Only usable by bot owner.)')
     @app_commands.describe(cog_name='The name of the cog to load.')
     async def load(self, interaction: discord.Interaction, cog_name: str) -> None:
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
+            return
+
         # Format the cog name
-        cog_name = cog_name.lower()
+        cog_name = cog_name.lower().replace(' ', '_')
 
         # Check if the user is the owner
         if not await checkIfOwner(interaction):
@@ -66,24 +74,29 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
         try:
             await self.bot.load_extension(f'cogs.{cog_name}')
             await interaction.response.send_message(
-                f'The cog "{cog_name}" was successfully mounted and started.', ephemeral=True)
-            return log.debug(f'Loaded the cog "{cog_name}" successfully.')
+                f'The cog "{cog_name.title().replace("_", " ")}" was successfully mounted and started.', ephemeral=True)
+            return logandprint.debug(f'Loaded the cog "{cog_name}" successfully.')
         # Throw an error if failed
         except commands.ExtensionError as e:
             # Throw a specific error if the cog can't be found
             if isinstance(e, discord.ext.commands.ExtensionNotFound):
-                return await interaction.response.send_message(f'The cog "{cog_name}" could not be loaded. Are you '
+                return await interaction.response.send_message(f'The cog "{cog_name.title().replace("_", " ")}" could not be loaded. Are you '
                                                                'sure you spelled the name correctly?',
                                                                ephemeral=True)
             await interaction.response.send_message(
-                f'An error occurred while loading cog "{cog_name}": {e}', ephemeral=True)
-            return log.error(f'Failed to load cog "{cog_name}" with the following error: {e}')
+                f'An error occurred while loading cog "{cog_name}": ```{e}```', ephemeral=True)
+            return logandprint.error(f'Failed to load cog "{cog_name}" with the following error: {e}')
 
     # Command: Unload
     @app_commands.command(name='unload', description='Unload a cog. (Only usable by bot owner.)')
     @app_commands.describe(cog_name='The name of the cog to unload.')
     async def unload(self, interaction: discord.Interaction, cog_name: str) -> None:
-        cog_name = cog_name.lower()
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
+            return
+
+        # Format the cog name
+        cog_name = cog_name.lower().replace(' ', '_')
 
         # Check if the user is the owner
         if not await checkIfOwner(interaction):
@@ -97,22 +110,29 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
         # Try to unload cog
         try:
             await self.bot.unload_extension(f'cogs.{cog_name}')
-            await interaction.response.send_message(f'The cog "{cog_name}" was successfully unloaded.', ephemeral=True)
-            return log.debug(f'The cog "{cog_name}" was unloaded.')
-        # Throw an error if failed
+            await interaction.response.send_message(f'The cog "{cog_name.title().replace("_", " ")}" was successfully unloaded.', ephemeral=True)
+            return logandprint.debug(f'The cog "{cog_name}" was unloaded.')
+
+        # Throw an error if unloading the cog fails
         except commands.ExtensionError as e:
             # Throw a specific error if the cog hasn't been loaded
             if isinstance(e, discord.ext.commands.ExtensionNotLoaded):
                 return await interaction.response.send_message(f'The cog "{cog_name}" has not been loaded. Are you sure '
                                                                'you spelled the name correctly?',
                                                                ephemeral=True)
-            return await interaction.response.send_message(f'An error occurred while unloading cog "{cog_name}": {e}')
+            await interaction.response.send_message(f'An error occurred while unloading the cog "{cog_name}": ```{e}```')
+            return logandprint.error(f'An error occurred while unloading the cog "{cog_name}": {e}')
 
     # Command: Reload
     @app_commands.command(name='reload', description='Reload a cog. (Only usable by bot owner.)')
     @app_commands.describe(cog_name='The name of the cog to reload.')
     async def reload(self, interaction: discord.Interaction, cog_name: str) -> None:
-        cog_name = cog_name.lower()
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
+            return
+
+        # Format the cog name
+        cog_name = cog_name.lower().replace(' ', '_')
 
         # Check if the user is the owner
         if not await checkIfOwner(interaction):
@@ -121,23 +141,29 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
         # Try to reload cog
         try:
             await self.bot.reload_extension(f'cogs.{cog_name}')
-            await interaction.response.send_message(f'The cog "{cog_name.title()}" was successfully reloaded.',
+            await interaction.response.send_message(f'The cog "{cog_name.title().replace("_", " ")}" was successfully reloaded.',
                                                            ephemeral=True)
-            return log.debug(f'Reloaded cog "{cog_name}."')
+            return logandprint.debug(f'Reloaded cog "{cog_name}."')
+
         # Throw an error if failed
         except commands.ExtensionError as e:
             # Throw a specific error if the cog hasn't been loaded
             if isinstance(e, discord.ext.commands.ExtensionNotLoaded):
-                return await interaction.response.send_message(f'The cog "{cog_name}" has not been loaded. Are you sure '
+                return await interaction.response.send_message(f'The cog "{cog_name.title().replace("_", " ")}" has not been loaded. Are you sure '
                                                                'you spelled the name correctly?',
                                                                ephemeral=True)
-            return await interaction.response.send_message(f'An error occurred while reloading cog "{cog_name}": {e}',
+            await interaction.response.send_message(f'An error occurred while reloading cog "{cog_name.title().replace("_", " ")}": ```{e}```',
                                                            ephemeral=True)
+            return logandprint.error(f'An error occurred while reloading cog "{cog_name}": {e}')
 
     # Command: Sync Commands
     @app_commands.command(name='synccommands',
                           description='Sync all app commands with Discord. (Only usable by bot owner.)')
     async def synccommands(self, interaction: discord.Interaction) -> None:
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
+            return
+
         # Check if the user is the owner
         if not await checkIfOwner(interaction):
             return
@@ -145,8 +171,11 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
         try:
             # Try and sync bot commands
             synced = await self.bot.tree.sync()
-            # Assign message to variable for efficiency
-            message = f'Synced {len(synced)} command(s) with Discord.'
+            # Make the message look good by correctly using an "s" after commands if there's more than one command
+            if len(synced) == 1:
+                message: str = f'Synced 1 command with Discord.'
+            else:
+                message: str = f'Synced {len(synced)} commands with Discord.'
             await interaction.response.send_message(message, ephemeral=True)
             return logandprint.info(message, source='d')
         except Exception as e:
@@ -158,12 +187,20 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
     # Command: Update
     @app_commands.command(name='update', description='Update BOB by pulling latest changes from his Git repository. (Only usable by bot owner.)')
     async def update(self, interaction: discord.Interaction) -> None:
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
+            return
+
         # Check if the user is the owner
         if not await checkIfOwner(interaction):
             return
 
-        #return await interaction.response.send_message('This feature is a work-in-progress!', ephemeral=True)
+        return await interaction.response.send_message('This feature is a work-in-progress!', ephemeral=True)
 
+        # Leaving the following code for now, even though it does nothing, because I found out it doesn't actually
+        # work if I deploy BOB to a server, since .env files and changes to the venv are not synced to the Git
+        # repository. I will revisit this later, once I have a better idea of how BOB will be hosted and how updates
+        # can be served.
         already_sent_message: bool = False
 
         try:

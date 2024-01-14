@@ -1,6 +1,6 @@
 # Imports
 import discord
-from utils.logger import Log
+from utils.logger import Log, LogAndPrint
 from dotenv import load_dotenv
 import os
 import sys
@@ -11,6 +11,7 @@ OWNER_ID: int = int(os.getenv("BOT_OWNER_ID"))
 
 # Create object of Log class
 log = Log()
+logandprint = LogAndPrint()
 
 
 # Define intents the bot needs
@@ -25,22 +26,30 @@ def defIntents() -> discord.Intents:
     return intents
 
 
-# Send message in channel function
-async def sendMessage(bot, channel_id: str, message: str) -> None:
+# Send message in channel function (not defining a return type for this function, because it needs to return either a
+# message or NoneType. Specifying a return type, then attempting to return None, is illegal and will raise an
+# exception.) I need to stop relying on stuff like this, or I'll struggle with non-dynamic languages like C or Rust.
+async def sendMessage(bot, channel_id: str, message: str):
     try:
-        # Convert the channel ID to an int
+        # Convert the channel ID to an integer
         channel_id: int = int(channel_id)
 
         # Get the channel using the ID
-        channel = bot.get_channel(channel_id)
+        channel: discord.TextChannel = bot.get_channel(channel_id)
 
         if channel is None:
-            return print(f'Failed to send message to channel ID "{channel_id}." Cannot find channel.')
+            return logandprint.error(f'Failed to send message to channel ID "{channel_id}." Cannot find channel.', source='d')
 
         # Send the message to the target channel
         await channel.send(message)
+
+        # Return the message object
+        return message
     except ValueError:
-        return print(f'Failed to send message to channel ID "{channel_id}." Invalid ID.')
+        logandprint.error(f'Failed to send message to channel ID "{channel_id}." Invalid ID.', source='d')
+
+        # Return None if there was an error.
+        return None
 
 
 # Custom owner check function for app commands

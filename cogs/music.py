@@ -4,6 +4,7 @@ from discord import app_commands
 from discord.ext import commands, tasks
 import wavelink
 import datetime
+import random
 import re
 from utils.logger import Log, LogAndPrint
 
@@ -23,7 +24,7 @@ logandprint = LogAndPrint()
 # The following three functions were written by ChatGPT. I know; shut up.
 def convertDuration(milliseconds) -> str:
     # Convert milliseconds to seconds
-    seconds = milliseconds / 1000
+    seconds: int = milliseconds / 1000
 
     # Create a timedelta object representing the duration
     duration = datetime.timedelta(seconds=seconds)
@@ -33,9 +34,9 @@ def convertDuration(milliseconds) -> str:
     minutes, seconds = divmod(remainder, 60)
 
     if int(hours) == 0:
-        formatted_time = f"{int(minutes):02}:{int(seconds):02}"
+        formatted_time: str = f"{int(minutes):02}:{int(seconds):02}"
     else:
-        formatted_time = f"{int(hours):02}:{int(minutes):02}:{int(seconds):02}"
+        formatted_time: str = f"{int(hours):02}:{int(minutes):02}:{int(seconds):02}"
 
     return formatted_time
 
@@ -57,6 +58,7 @@ def timeToMilliseconds(time_str) -> int:
     # Regular expression pattern for HH:MM:SS and MM:SS formats
     hh_mm_ss_pattern = r'^(\d{2}):(\d{2}):(\d{2})$'
     mm_ss_pattern = r'^(\d{2}):(\d{2})$'
+    logandprint.debug(f'Type: {type(hh_mm_ss_pattern)}, {type(mm_ss_pattern)}')
 
     # Check if the input matches either pattern
     hh_mm_ss_match = re.match(hh_mm_ss_pattern, time_str)
@@ -68,8 +70,9 @@ def timeToMilliseconds(time_str) -> int:
     elif mm_ss_match:
         minutes, seconds = map(int, mm_ss_match.groups())
         total_seconds = minutes * 60 + seconds
+    # TODO: Maybe remove the following, because I don't think error handling is required for this function.
     else:
-        raise ValueError("Invalid time format. Use HH:MM:SS or MM:SS.")
+        raise ValueError(f'Invalid time format in timeToMilliseconds function in {__name__}. Use HH:MM:SS or MM:SS.')
 
     # Convert total seconds to milliseconds
     milliseconds: int = total_seconds * 1000
@@ -78,32 +81,33 @@ def timeToMilliseconds(time_str) -> int:
 
 # Function that runs basic checks for music-related commands
 # Checks if user is in VC, bot is in VC, player is running, etc.
-async def runChecks(interaction: discord.Interaction, BotNotInVC=None, UserNotInVCMsg=None, UserInDifferentVCMsg=None) -> bool:
+async def runChecks(interaction: discord.Interaction, bot_not_in_vc_msg=None, user_not_in_vc_msg=None,
+                    user_in_different_vc_msg=None) -> bool:
     user_vc = interaction.user.voice
     bot_vc = interaction.guild.voice_client
 
-    if not BotNotInVC:
-        BotNotInVC: str = 'I am not connected to a voice channel.'
+    if not bot_not_in_vc_msg:
+        bot_not_in_vc_msg: str = 'I am not connected to a voice channel.'
 
-    if not UserNotInVCMsg:
-        UserNotInVCMsg: str = 'You must be connected to the same channel as me to perform this action.'
+    if not user_not_in_vc_msg:
+        user_not_in_vc_msg: str = 'You must be connected to the same channel as me to perform this action.'
 
-    if not UserInDifferentVCMsg:
-        UserInDifferentVCMsg: str = 'You must be in the same channel as me to perform this action.'
+    if not user_in_different_vc_msg:
+        user_in_different_vc_msg: str = 'You must be in the same channel as me to perform this action.'
 
     # Bot not connected to VC
     if not bot_vc:
-        await interaction.response.send_message(BotNotInVC, ephemeral=True)
+        await interaction.response.send_message(bot_not_in_vc_msg, ephemeral=True)
         return False
 
     # User not connected to VC
     if not user_vc:
-        await interaction.response.send_message(UserNotInVCMsg, ephemeral=True)
+        await interaction.response.send_message(user_not_in_vc_msg, ephemeral=True)
         return False
 
     # User in different VC
     if user_vc.channel != bot_vc.channel:
-        await interaction.response.send_message(UserInDifferentVCMsg, ephemeral=True)
+        await interaction.response.send_message(user_in_different_vc_msg, ephemeral=True)
         return False
 
     return True
@@ -381,7 +385,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
             # Create list of tracks in playlist
             playlist_tracks: list[wavelink.YouTubeTrack] = playlist.tracks
-            notify_about_playlist_too_long = False
+            notify_about_playlist_too_long: bool = False
 
             # If playlist is too long, update notify var
             if len(playlist_tracks) > 100:
@@ -405,15 +409,15 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
                 color=discord.Color.from_rgb(1, 162, 186)
             )
 
-            # Add a few items in the playlist to the embed
-            limit = 5 if len(playlist_tracks) > 5 else len(playlist_tracks)
+            # Add five items in the playlist to the embed
+            limit: int = 5 if len(playlist_tracks) > 5 else len(playlist_tracks)
             i: int = 0
             while i < limit:
                 embed.add_field(name=f'Track {i + 1}:', value=f'[{playlist_tracks[i].title}]({playlist_tracks[i].uri})',
                                 inline=False)
                 i: int = i + 1
 
-            # If playlist is greater than five tracks, add footer
+            # If playlist is greater than five tracks, add a notifying footer to the embed
             if len(playlist_tracks) > 5:
                 embed.set_footer(text=f'And {len(playlist_tracks) - 5} more tracks...')
 
@@ -424,7 +428,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
                     player.queue.put(item=track)
 
                 # Set embed description var
-                embed_description = f'Added {len(playlist_tracks)} songs to queue in channel {player.channel}.'
+                embed_description: str = f'Added {len(playlist_tracks)} songs to queue in channel {player.channel}.'
 
                 # If playlist is too long, change description of embed to notify user
                 if notify_about_playlist_too_long:
@@ -443,12 +447,12 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
                 # Update the current_track var with the now playing track
                 self.current_track = playlist_tracks[0]
 
-                # Add all items to queue
+                # Add all items to queue, excluding the first song(which is the one that will start playing immediately)
                 for track in playlist_tracks[1:]:
                     player.queue.put(item=track)
 
                 # Set embed description var
-                embed_description = f'Now playing [{playlist_tracks[0].title}]({playlist_tracks[0].uri}), and added {len(playlist_tracks) - 1} songs to queue in channel {player.channel}.'
+                embed_description: str = f'Now playing [{playlist_tracks[0].title}]({playlist_tracks[0].uri}), and added {len(playlist_tracks) - 1} songs to queue in channel {player.channel}.'
 
                 # If playlist is too long, change description of embed to notify user
                 if notify_about_playlist_too_long:
@@ -540,6 +544,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             await player.stop()
 
             # Remove current playing track var (for loop command)
+            # TODO: Test the following. It may cause an error.
             self.current_track = None
 
             # Respond to command
@@ -647,7 +652,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             return
 
         # Run checks
-        if not await runChecks(interaction, UserInDifferentVCMsg='You can only adjust the volume of the music if you\'re in the same voice channel as me.'):
+        if not await runChecks(interaction, user_in_different_vc_msg='You can only adjust the volume of the music if you\'re in the same voice channel as me.'):
             return
 
         # Check if volume is in acceptable parameters
@@ -790,7 +795,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         if not player:
             return
 
-        # Check if player is running
+        # Check if player is playing a track
         if not player.current:
             return await interaction.response.send_message('No track is currently playing.', ephemeral=True)
 
@@ -801,6 +806,34 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         else:
             self.loop_track = False
             await interaction.response.send_message('Disabled looping of current track.', ephemeral=True)
+
+        # Log the command usage
+        return log.logCommand(interaction.user, interaction.command.name)
+
+    # Command: Shuffle
+    @app_commands.command(name='shuffle', description='Shuffle the tracks in the queue.')
+    async def shuffle(self, interaction: discord.Interaction):
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
+            return
+
+        # Run checks
+        if not await runChecks(interaction):
+            return
+
+        # Check if player is running
+        player: wavelink.Player = await checkPlayer(interaction)
+        if not player:
+            return
+
+        # If there is more than 1 item in the queue, shuffle it
+        if player.queue and len(player.queue) > 1:
+            random.shuffle(player.queue)
+            await interaction.response.send_message('Shuffled queue.', ephemeral=True)
+
+        # Otherwise, inform the user the queue can't be shuffled
+        else:
+            return interaction.response.send_message('There are not enough items in the queue to shuffle.', ephemeral=True)
 
         # Log the command usage
         return log.logCommand(interaction.user, interaction.command.name)
@@ -855,6 +888,8 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         return log.logCommand(interaction.user, interaction.command.name)
 
     # TODO: Finish queue info command
+    # TODO: Maybe temporarily abandon the fancy QueueInfo UI for a less advanced system that allows you to specify a
+    #  page number in the command
     # Command: QueueInfo
     @app_commands.command(name='queueinfo', description='Shows the current track queue.')
     async def queueinfo(self, interaction: discord.Interaction) -> None:
@@ -884,7 +919,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         return log.logCommand(interaction.user, interaction.command.name)
 
     # Command: Move
-    @app_commands.command(name='move', description='Move the bot from one VC to another. Only usable by administrators.')
+    @app_commands.command(name='move', description='Move the bot from one VC to another. Only usable by staff.')
     @discord.app_commands.checks.has_permissions(move_members=True)
     async def move(self, interaction: discord.Interaction) -> None:
         # Check if maintenance mode is on

@@ -49,6 +49,8 @@ def exportBlockedWord(word: str) -> None:
 #  and profile pictures to verify they're not rule-breaking, because if someone updates their profile picture or status
 #  while BOB is offline, he won't detect the change and won't check for blocked words/images.
 # TODO: Add nickname scanning
+# TODO: Add command to remove a word or phrase from the blocklist
+# TODO: Update addblockedword command to be only usable by admins
 
 class Moderation(commands.GroupCog, description='Commands relating to moderation utilities.'):
     # Define vars
@@ -76,13 +78,18 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
     # Listener: On Message
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message) -> None:
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
+            return
+
+        # Prevent scanning of webhooks
+        # TODO: Eventually see if there's a way to scan webhooks as well
+        if not message.author:
+            return
+
         # Check if message was sent by the bot
         # Using "self.bot.user.id" instead of "is_bot" is an early stage of nuke prevention
         if message.author.id == self.bot.user.id:
-            return
-
-        # Check if maintenance mode is on
-        if self.bot.maintenance_mode:
             return
 
         # Vars
@@ -95,6 +102,9 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
                 attachment_names.append(x.filename)
 
         # Use Regex formatting to search message for blocked words.
+        # TODO: Add a system for "potentially bad" words or phrases that aren't deleted immediately, but the staff are
+        #  notified of the message
+        # TODO: Go through the blocked words list(ughhh) and remove entries that could lead to false positives
         message_content = re.sub(r'[^a-zA-Z0-9]', '', message.content.lower())
         for blocked_word in self.blocked_words:
             if re.search(rf'\b{re.escape(blocked_word)}\b', message_content):
@@ -107,7 +117,7 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
                             # What the following spaghetti code does is, basically, if the message is more than 1,900
                             #  characters, it cuts off the last 100 characters and appends three dots. If the message is
                             #  not over 1,900 characters, it prints the entire message. The || at the start and finish
-                            #  is to mark the message as a spoiler, meaning the server staff don't have to read the 
+                            #  is to mark the message as a spoiler, meaning the server staff don't have to read the
                             #  message if they don't want to. I set it to 100 characters to account for the possible 
                             #  length of a nickname, since "message.author.mention" is used.
                             f'\n||{(original_message_content[:-100] + "...") if len(original_message_content) > 1900 else original_message_content}||')
@@ -117,8 +127,8 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
                 await message.author.send(
                     f"{message.author.mention}, your message contains a rule-breaking word or phrase. If this is in "
                     "error, please reach out to a moderator.")
-                logandprint.warning(f'User {message.author} sent a message containing a blocked word or phrase '
-                                    f'in channel #{message.channel.name}.', source='d')
+                logandprint.warning(f'User @{message.author} sent a message containing a blocked word or phrase '
+                                    f'in channel #{message.channel.name}. Triggering word: "{blocked_word}."', source='d')
 
                 # Stop checking for blocked words after the first word is found
                 return

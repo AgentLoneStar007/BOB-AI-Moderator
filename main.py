@@ -152,7 +152,7 @@ async def run() -> None:
         if isinstance(error, app_commands.CommandOnCooldown):
             logandprint.warning(f'User {interaction.user.name} was unable to run command "{interaction.command.name}" because it\'s'
                   ' on cooldown.', source='d')
-            return await interaction.response.send_message('This command is on cooldown!', ephemeral=True)
+            return await interaction.response.send_message(f'This command is on cooldown!', ephemeral=True)
 
         # Handler for failing to respond to an interaction quickly enough
         if isinstance(error, discord.app_commands.CommandInvokeError):
