@@ -157,10 +157,10 @@ async def run() -> None:
         # Handler for failing to respond to an interaction quickly enough
         if isinstance(error, discord.app_commands.CommandInvokeError):
             return logandprint.warning(f'Failed to respond to command "{interaction.command.name}" run by'
-                         f' {interaction.user.display_name} because the interaction timed out or failed. Error: {error}', source='d')
+                         f' {interaction.user.display_name} because the interaction either timed out or failed. Error: {error}', source='d')
 
         # So far no other handlers are required, because AppCommands automatically requires correct argument types
-        #  and "CommandNotFound" errors are (to my knowledge) impossible with slash commands.
+        # and "CommandNotFound" errors are (to my knowledge) impossible with slash commands.
 
         # General error handler
         else:

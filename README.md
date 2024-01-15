@@ -30,7 +30,7 @@ his code.
   - [ ] More Player Control/Info Commands
     - [x] Shuffle Command
     - [ ] Queue Info Command
-    - [ ] Bulk Queue Item Removal Command
+    - [x] Bulk Queue Item Removal Command
 - [ ] Member Utilities
   - [x] Question Command
   - [ ] Feedback Command
