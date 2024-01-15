@@ -4,7 +4,6 @@ from discord import app_commands
 from discord.ext import commands, tasks
 import wavelink
 import datetime
-import random
 import re
 from utils.logger import Log, LogAndPrint
 
@@ -582,6 +581,10 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         # Stop playback
         await player.stop()
 
+        # Unpause the player if it is paused
+        if player.is_paused():
+            await player.resume()
+
         # Empty queue
         player.queue.reset()
 
@@ -828,19 +831,19 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
         # If there is more than 1 item in the queue, shuffle it
         if player.queue and len(player.queue) > 1:
-            random.shuffle(player.queue)
+            player.queue.shuffle()
             await interaction.response.send_message('Shuffled queue.', ephemeral=True)
 
         # Otherwise, inform the user the queue can't be shuffled
         else:
-            return interaction.response.send_message('There are not enough items in the queue to shuffle.', ephemeral=True)
+            return await interaction.response.send_message('There are not enough items in the queue to shuffle.', ephemeral=True)
 
         # Log the command usage
         return log.logCommand(interaction.user, interaction.command.name)
 
-    # Command: PlayerInfo
-    @app_commands.command(name='playerinfo', description='Shows information regarding the current track and queue.')
-    async def playerinfo(self, interaction: discord.Interaction) -> None:
+    # Command: QueueRemove
+    @app_commands.command(name='queueremove', description='Remove one or more items from the queue. Syntax: "/queueremove <index>" or "<index_start:index_end>"', )
+    async def queueRemove(self, interaction: discord.Interaction, index: str):
         # Check if maintenance mode is on
         if self.bot.maintenance_mode:
             return
@@ -854,7 +857,109 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         if not player:
             return
 
+        # Check if there's anything in the queue
+        if not player.queue:
+            return await interaction.response.send_message('There are no items in the queue to remove.', ephemeral=True)
+
+        # Check if the index is in the correct format
+        if not index.isnumeric() and ':' not in index:
+            return await interaction.response.send_message('Invalid format. Accepted formats are `/queueremove <index '
+                                                           'of item to remove>` or `/queueremove <index start:index end>`.', ephemeral=True)
+
+        # If the index is a singular item to remove,
+        if index.isnumeric():
+            # If the index is negative or zero, it's invalid
+            if int(index) < 1:
+                return await interaction.response.send_message('Index must be greater than zero.', ephemeral=True)
+
+            # If the index given is greater than the queue's length, it's invalid
+            if int(index) > len(player.queue):
+                return await interaction.response.send_message(f'There is no item in the queue with the index of {index}. The queue\'s length is {len(player.queue)}', ephemeral=True)
+
+            # Get the item that will be removed and store it in a variable
+            track: wavelink.Playable = player.queue.__getitem__(int(index) - 1)
+
+            # Remove the item from the queue
+            player.queue.__delitem__(int(index) - 1)
+
+            # Stylize the response message depending on whether there's items remaining in the queue or not
+            if not player.queue:
+                await interaction.response.send_message(f'Removed item [{track.title}]({track.uri}) from queue. The queue is now empty.',
+                                                        ephemeral=True)
+            else:
+                await interaction.response.send_message(f'Removed item [{track.title}]({track.uri}) from queue.', ephemeral=True)
+
+        # Otherwise, it's start index:end index format
+        else:
+            # Split the string at the colon
+            indexes: list = index.split(':')
+
+            # If there's more than two items in the indexes list, it's an invalid format
+            if len(indexes) != 2:
+                return await interaction.response.send_message('Invalid format. Accepted formats are `/queueremove <index '
+                                                           'of item to remove>` or `/queueremove <index start:index end>`.', ephemeral=True)
+
+            # If either of the items are not numeric, it's an invalid format
+            for x in indexes:
+                if not x.isnumeric():
+                    return await interaction.response.send_message(
+                        'Invalid format. Accepted formats are `/queueremove <index '
+                        'of item to remove>` or `/queueremove <index start:index end>`.', ephemeral=True)
+
+            # To make life easier, convert the indexes to integers
+            indexes: list[int] = [int(x) for x in indexes]
+
+            # If the first index is less than one, it's an invalid format
+            if indexes[0] < 1:
+                return await interaction.response.send_message('Starting index must be greater than zero.',
+                                                               ephemeral=True)
+
+            # If either of the indexes are greater than the length of the queue, it's an invalid format
+            for x in indexes:
+                if x > len(player.queue):
+                    return await interaction.response.send_message('Indexes must be less than or equal to the length '
+                                                                   'of the queue.', ephemeral=True)
+
+            # If the starting index is greater than the ending index, it's an invalid format
+            if indexes[0] > indexes[1]:
+                return await interaction.response.send_message('The starting index must be less than the ending index.', ephemeral=True)
+
+            # Create a variable to store the count of items removed from the queue
+            count: int = 0
+            # For every number between starting index and ending index, remove the index from queue. This is reversed
+            # to prevent the queue index changing while items are being removed.
+            for x in reversed(range(int(indexes[0]), int(indexes[1]) + 1)):
+                # Delete the item in queue
+                player.queue.__delitem__(x - 1)
+                # Add to the count variable
+                count = count + 1
+
+            # Send notifying message, with stylization
+            if count == 1:
+                await interaction.response.send_message(f'Removed one item from queue.', ephemeral=True)
+            else:
+                await interaction.response.send_message(f'Removed {count} items from queue.', ephemeral=True)
+
+        # Log the command usage
+        return log.logCommand(interaction.user, interaction.command.name)
+
+    # Command: PlayerInfo
+    @app_commands.command(name='playerinfo', description='Shows information regarding the current track and queue.')
+    async def playerInfo(self, interaction: discord.Interaction) -> None:
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
+            return
+
+        # Run checks
+        if not await runChecks(interaction):
+            return
+
         # Check if player is running
+        player: wavelink.Player = await checkPlayer(interaction)
+        if not player:
+            return
+
+        # Check if player is playing any tracks
         if not player.current:
             return await interaction.response.send_message('No track is currently playing, and the queue is empty.', ephemeral=True)
 
@@ -864,9 +969,9 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
         # Get loop status
         if self.loop_track:
-            is_looping = 'Enabled'
+            is_looping: str = 'Enabled'
         else:
-            is_looping = 'Disabled'
+            is_looping: str = 'Disabled'
 
         # Create the info embed
         embed = discord.Embed(
@@ -892,16 +997,14 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
     #  page number in the command
     # Command: QueueInfo
     @app_commands.command(name='queueinfo', description='Shows the current track queue.')
-    async def queueinfo(self, interaction: discord.Interaction) -> None:
+    async def queueInfo(self, interaction: discord.Interaction) -> None:
         # Check if maintenance mode is on
         if self.bot.maintenance_mode:
             return
 
-        return await interaction.response.send_message('This command is still a work-in-progress.', ephemeral=True)
-
         # Run checks
-        #if not await runChecks(interaction):
-        #    return
+        if not await runChecks(interaction):
+            return
 
         # Check if player is running
         player: wavelink.Player = await checkPlayer(interaction)
@@ -910,6 +1013,9 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
         if len(player.queue) < 1:
             return await interaction.response.send_message('The queue is currently empty.', ephemeral=True)
+
+        logandprint.debug(player.queue)
+        return await interaction.response.send_message('This command is still a work-in-progress.', ephemeral=True)
 
         view = QueueInfoUI(player=player, interaction=interaction)
         await view.generateFirstEmbed(interaction=interaction)
