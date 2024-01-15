@@ -27,9 +27,9 @@ his code.
   - [x] YouTube Support
   - [x] YouTube Playlist Support
   - [ ] Wavelink v3 Support
-  - [ ] More Player Control/Info Commands
+  - [x] More Player Control/Info Commands
     - [x] Shuffle Command
-    - [ ] Queue Info Command
+    - [x] Queue List Command
     - [x] Bulk Queue Item Removal Command
 - [ ] Member Utilities
   - [x] Question Command
