@@ -80,19 +80,16 @@ def timeToMilliseconds(time_str) -> int:
 
 # Function that runs basic checks for music-related commands
 # Checks if user is in VC, bot is in VC, player is running, etc.
-async def runChecks(interaction: discord.Interaction, bot_not_in_vc_msg=None, user_not_in_vc_msg=None,
-                    user_in_different_vc_msg=None) -> bool:
+async def runChecks(
+        interaction: discord.Interaction,
+        bot_not_in_vc_msg: str = 'I am not connected to a voice channel.',
+        user_not_in_vc_msg: str = 'You must be connected to the same channel as me to perform this action.',
+        user_in_different_vc_msg: str = 'You must be in the same channel as me to perform this action.'
+        ) -> bool:
+
+    # Create user voice chat and bot voice chat vars
     user_vc = interaction.user.voice
     bot_vc = interaction.guild.voice_client
-
-    if not bot_not_in_vc_msg:
-        bot_not_in_vc_msg: str = 'I am not connected to a voice channel.'
-
-    if not user_not_in_vc_msg:
-        user_not_in_vc_msg: str = 'You must be connected to the same channel as me to perform this action.'
-
-    if not user_in_different_vc_msg:
-        user_in_different_vc_msg: str = 'You must be in the same channel as me to perform this action.'
 
     # Bot not connected to VC
     if not bot_vc:
@@ -109,6 +106,7 @@ async def runChecks(interaction: discord.Interaction, bot_not_in_vc_msg=None, us
         await interaction.response.send_message(user_in_different_vc_msg, ephemeral=True)
         return False
 
+    # Return true if all checks are passed
     return True
 
 
@@ -136,8 +134,6 @@ class QueueInfoUI(discord.ui.View):
     current_page: int
     current_position: int
 
-    # TODO: Fix this class because the init function can't be async but the class needs to be asynchronous
-
     # Class init function
     def __init__(self, player: wavelink.Player, interaction: discord.Interaction):
         # Run init function for parent class(discord.ui.View)
@@ -164,33 +160,6 @@ class QueueInfoUI(discord.ui.View):
             self.embed_title = 'Queue'
         else:
             self.current_page = 1
-
-    # Update message
-    async def updateMessage(self, interaction: discord.Interaction, embed: discord.Embed):
-        ...
-        #await interaction.response.
-
-    async def generateFirstEmbed(self, interaction: discord.Interaction):
-        print(interaction.id)
-
-        # Create the embed
-        embed = discord.Embed(
-            title=self.embed_title,
-            description=f'There are currently {len(self.queue)} tracks in queue.',
-            color=discord.Color.from_rgb(1, 162, 186)
-        )
-
-        while self.current_position < 5:
-            embed.add_field(name=f'Track {self.current_position + 1}:', value=self.queue[self.current_position],
-                            inline=False)
-            self.current_position += 1
-
-            # If the current count is greater than queue length
-            if self.current_position >= len(self.queue):
-                break
-        self.current_page += 1
-
-        await self.updateMessage(interaction, embed)
 
     async def generateEmbed(self, interaction: discord.Interaction, direction: int = 1, page: int = 0):
         # Set/update vars
@@ -613,8 +582,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         # Check if paused
         if player.is_paused():
             # Don't log the command because it makes no difference
-            await interaction.response.send_message('The player is already paused.', ephemeral=True)
-            return
+            return await interaction.response.send_message('The player is already paused.', ephemeral=True)
 
         # Pause the player
         await player.pause()
@@ -993,11 +961,10 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         return log.logCommand(interaction.user, interaction.command.name)
 
     # TODO: Finish queue info command
-    # TODO: Maybe temporarily abandon the fancy QueueInfo UI for a less advanced system that allows you to specify a
-    #  page number in the command
+    # TODO: Eventually replace the page argument with buttons for navigating the pages
     # Command: QueueInfo
-    @app_commands.command(name='queueinfo', description='Shows the current track queue.')
-    async def queueInfo(self, interaction: discord.Interaction) -> None:
+    @app_commands.command(name='queuelist', description='Shows a list of items in the queue. Syntax: "/queuelist (page)"')
+    async def queueList(self, interaction: discord.Interaction, page: int = 1) -> None:
         # Check if maintenance mode is on
         if self.bot.maintenance_mode:
             return
@@ -1011,15 +978,41 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         if not player:
             return
 
-        if len(player.queue) < 1:
+        # Check if the queue is empty
+        if not player.queue:
             return await interaction.response.send_message('The queue is currently empty.', ephemeral=True)
 
-        logandprint.debug(player.queue)
-        return await interaction.response.send_message('This command is still a work-in-progress.', ephemeral=True)
+        # Create a var containing the maximum amount of pages, which is the queue length divided by 5 with no
+        # remainder, plus one
+        max_pages: int = (len(player.queue) // 5) + 1
 
-        view = QueueInfoUI(player=player, interaction=interaction)
-        await view.generateFirstEmbed(interaction=interaction)
-        await interaction.response.send_message('Generating queue list...', view=view)
+        # Check if the given page number is greater than the maximum amount of pages
+        if page > max_pages:
+            return await interaction.response.send_message(
+                f'The input page number {page} is higher than the available amount of pages, {max_pages}.', ephemeral=True)
+
+        # Set the embed title to include the page number if the queue's longer than 5, otherwise don't include it
+        embed_title: str = f'Queue - Page {page}' if len(player.queue) > 5 else 'Queue'
+
+        # Create the embed
+        embed = discord.Embed(
+            title=embed_title,
+            # Some spaghetti stylization code
+            description=f'There are currently {len(player.queue)} tracks in queue.' if len(player.queue) > 1 else 'There is currently one track in queue.',
+            color=discord.Color.from_rgb(1, 162, 186)
+        )
+
+        # Loop through the first five items in queue, adding each to the embed
+        for i in range((page - 1) * 5, min(page * 5, len(player.queue))):
+            # Add the item to the embed
+            embed.add_field(
+                name=f'Track {i + 1}:',
+                value=f'[{player.queue[i].title}]({player.queue[i].uri})',
+                inline=False
+            )
+
+        # Send the list
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
         # Log command usage
         return log.logCommand(interaction.user, interaction.command.name)

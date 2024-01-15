@@ -66,7 +66,7 @@ class MemberUtils(commands.Cog, description="Utilities for server members."):
     async def on_ready(self) -> None:
         return logandprint.logCogLoad(self.__class__.__name__)
 
-    # Command: Question
+    # Command: Question, Cooldown: 5 minutes
     @app_commands.command(name='question', description='Leave a question for the server staff to answer.')
     # By specifying i.guid_id and i.user.id, it's a member cooldown, meaning that a member in a server can use the
     # command, go on cooldown, but go to another server that the bot is in and use the command. In other words, the
@@ -90,7 +90,8 @@ class MemberUtils(commands.Cog, description="Utilities for server members."):
         # Log the event
         return log.info(f'{interaction.user.name} started a questionnaire form for staff to answer.', source='d')
 
-    @app_commands.command(name='reaction', description='Choose a reaction image from a list. Like advanced emojis.')
+    # Command: Reaction, Cooldown: 5 seconds
+    @app_commands.command(name='reaction', description='Choose a reaction image from a list. It\'s kind of like advanced emojis.')
     @app_commands.checks.cooldown(1, 5.0, key=lambda i: (i.guild_id, i.user.id))
     async def reaction(self, interaction: discord.Interaction) -> None:
         # Check if maintenance mode is on

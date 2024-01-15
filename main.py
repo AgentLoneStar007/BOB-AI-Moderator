@@ -1,6 +1,6 @@
-## BOB-AI-Moderator
-## A Discord bot made in Python using Discord.py, by AgentLoneStar007
-## https://github.com/AgentLoneStar007
+# BOB-AI-Moderator
+# A Discord bot made in Python using Discord.py, by AgentLoneStar007
+# https://github.com/AgentLoneStar007
 import aiohttp.client_exceptions
 # Imports
 import discord
@@ -21,7 +21,7 @@ load_dotenv()
 BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 OWNER_ID = int(os.getenv("BOT_OWNER_ID"))
 BOT_OUTPUT_CHANNEL = os.getenv("BOT_OUTPUT_CHANNEL")
-WAVELINK_PASSWORD = os.getenv("WAVELINK_PASSWORD")
+WAVELINK_PASSWORD = os.getenv("LAVALINK_PASSWORD")
 custom_status = 'Use "/help" for help.'
 
 # TODO: Add interactive console for bot
