@@ -21,7 +21,7 @@ load_dotenv()
 BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 OWNER_ID = int(os.getenv("BOT_OWNER_ID"))
 BOT_OUTPUT_CHANNEL = os.getenv("BOT_OUTPUT_CHANNEL")
-WAVELINK_PASSWORD = os.getenv("LAVALINK_PASSWORD")
+LAVALINK_PASSWORD = os.getenv("LAVALINK_PASSWORD")
 custom_status = 'Use "/help" for help.'
 
 # TODO: Add interactive console for bot
@@ -83,7 +83,7 @@ Custom Status: \033[37m\033[04m"{custom_status}"\033[0m\033[32m
 
     # Create setup hook for Wavelink music player
     async def setup_hook(self) -> None:
-        node: wavelink.Node = wavelink.Node(uri='http://localhost:2333', password=WAVELINK_PASSWORD)
+        node: wavelink.Node = wavelink.Node(uri='http://localhost:2333', password=LAVALINK_PASSWORD)
         await wavelink.NodePool.connect(client=self, nodes=[node])
 
     # Add a handler for anyone trying to use old command system

@@ -114,12 +114,12 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
                     channel_id=self.bot_output_channel,
                     message=f'User {message.author.mention} sent a message containing one or more blocked words or '
                             f'phrases in channel {message.channel.mention}.\n\n**Original message:**'
-                            # What the following spaghetti code does is, basically, if the message is more than 1,900
-                            #  characters, it cuts off the last 100 characters and appends three dots. If the message is
-                            #  not over 1,900 characters, it prints the entire message. The || at the start and finish
-                            #  is to mark the message as a spoiler, meaning the server staff don't have to read the
-                            #  message if they don't want to. I set it to 100 characters to account for the possible 
-                            #  length of a nickname, since "message.author.mention" is used.
+                            # What the following spaghetti code does is if the message is more than 1,900 characters,
+                            # it cuts off the last 100 characters and appends three dots. If the message is not over
+                            # 1,900 characters, it prints the entire message. The || at the start and finish is to
+                            # mark the message as a spoiler, meaning the server staff don't have to read the message
+                            # if they don't want to. I set it to 100 characters to account for the possible length of
+                            # a nickname, since "message.author.mention" is used.
                             f'\n||{(original_message_content[:-100] + "...") if len(original_message_content) > 1900 else original_message_content}||')
 
                 # Delete the message containing the blocked word, notify the user, and log the offense
@@ -354,7 +354,7 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
         except discord.HTTPException as e:
             await interaction.response.send_message(f'The following error occurred when trying to ban member {member.mention}: ```{e}```', ephemeral=True)
 
-            return logandprint.error(f'The following error occurred when trying to ban member {member.mention}: {e}')
+            return logandprint.error(f'The following error occurred when trying to ban member {member.mention}: {e}', source='d')
 
     # Command: TempBan
     @app_commands.command(name='tempban', description=
@@ -372,14 +372,14 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
         # Get the current time in UTC, get the time that it will be to unban the user, and format it to a string
         current_time = datetime.utcnow()
         future_time = current_time + timedelta(minutes=duration)
-        unban_timestamp = int(future_time.timestamp())
-        unban_time = future_time.strftime("%Y-%m-%d %H:%M")
+        unban_timestamp: int = int(future_time.timestamp())
+        unban_time: str = future_time.strftime("%Y-%m-%d %H:%M")
 
         # Create the dictionary entry
-        temp_banned_user = {'user_id': f'{member.id}', 'time_to_unban': unban_timestamp}
+        temp_banned_user: dict = {'user_id': f'{member.id}', 'time_to_unban': unban_timestamp}
 
         # Create the reason (if needed)
-        if reason == "":
+        if not reason:
             reason = f"You have been temporarily banned from the server. You will be unbanned on <t:{unban_timestamp}:f> UTC."
 
         # Now log that, along with the temp-banned user to a file (and create the file if it doesn't exist)
@@ -406,8 +406,8 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
         await sendMessage(self.bot, self.bot_output_channel,
                           f'{member.mention}(ID: `{member.id}`) has been temporarily banned till <t:{unban_timestamp}:f> UTC. Reason: "{reason}".')
         await interaction.response.send_message(
-            f'{member.mention} was temporarily banned. See `#bot-output` for more info.', ephemeral=True)
-        return logandprint.info(f'{member.name}(ID: {member.id}) has been temporarily banned till {unban_time} UTC. Reason: "{reason}".')
+            f'{member.mention} was temporarily banned. See <#{self.bot_output_channel}> for more info.', ephemeral=True)
+        return logandprint.info(f'{member.name}(ID: {member.id}) has been temporarily banned till {unban_time} UTC. Reason: "{reason}".', source='d')
 
     # Command: Unban
     @app_commands.command(name='unban', description='Unbans a user. Syntax: "/unban <user ID>"')
@@ -496,7 +496,7 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
             return logandprint.error(f'Failed to reload blocked words list with the following error: {e}', source='d')
 
     @app_commands.command(name='addblockedword', description='Add a blocked word or phrase to the blocked words list. (Only usable by staff.)')
-    @app_commands.checks.has_permissions(manage_messages=True)
+    @app_commands.checks.has_permissions()
     async def addblockedword(self, interaction: discord.Interaction, blocked_word: str) -> None:
         # Check if maintenance mode is on
         if self.bot.maintenance_mode:

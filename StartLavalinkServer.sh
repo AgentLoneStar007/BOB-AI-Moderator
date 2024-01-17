@@ -1,4 +1,4 @@
 #!/bin/bash
 
-cd lavalink
+cd lavalink || return
 java -jar Lavalink.jar

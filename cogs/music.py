@@ -11,9 +11,8 @@ from utils.logger import Log, LogAndPrint
 # TODO: Create limit on queue size for player
 # TODO: Add auto-compression to prevent people from playing deafening tracks and blowing others' ears out (I think
 #  Wavelink has audio leveling systems I can use)
-# TODO: Add a command to go to specific song in queue
-# TODO: Add a queue shuffle command
-# TODO: Find a way to prevent people from playing videos with blocked words in the title
+# TODO: Add a command to go to specific song in queue called /skipto
+# TODO: Find a way to prevent people from playing videos with blocked words in the title(maybe)
 
 # Create object of Log and LogAndPrint class
 log = Log()
@@ -125,112 +124,6 @@ async def checkPlayer(interaction: discord.Interaction, custom_message: str = No
         return None
 
 
-class QueueInfoUI(discord.ui.View):
-    # Vars
-    player: wavelink.Player
-    queue: list
-    nav_buttons_needed: bool
-    embed_title: str = 'Queue - Page 1'
-    current_page: int
-    current_position: int
-
-    # Class init function
-    def __init__(self, player: wavelink.Player, interaction: discord.Interaction):
-        # Run init function for parent class(discord.ui.View)
-        super().__init__()
-
-        # Vars
-        player_queue = player.queue
-        self.player = player
-
-        # Reset existing(if any) vars
-        self.nav_buttons_needed = False
-        self.queue = []
-        self.current_page = 0
-        self.current_position = 0
-
-        # Convert the player queue to another list with Discord-recognizable links with the names and URLs of the tracks
-        for x in player_queue:
-            self.queue.append(f'[{x.title}]({x.uri})')
-
-        # If the queue is shorter than 5 items, remove the navigation buttons
-        if len(self.queue) <= 5:
-            self.remove_item(self.previous)
-            self.remove_item(self.next)
-            self.embed_title = 'Queue'
-        else:
-            self.current_page = 1
-
-    async def generateEmbed(self, interaction: discord.Interaction, direction: int = 1, page: int = 0):
-        # Set/update vars
-        queue = self.queue
-        embed_title = self.embed_title
-
-        if page == 0:
-            self.current_position = 0
-            self.current_page = 1
-
-        # Change embed title if there are multiple pages
-        if self.current_page > 0:
-            embed_title = f'Queue - Page {self.current_page}'
-            self.current_page = self.current_page + direction
-
-        # Create the embed
-        embed = discord.Embed(
-            title=embed_title,
-            description=f'There are currently {len(queue)} tracks in queue.',
-            color=discord.Color.from_rgb(1, 162, 186)
-        )
-
-        # Remove previous button if on first page
-        if self.current_page == 1:
-            self.remove_item(self.previous)
-            embed.add_field(name='Current Track:', value=f'[{self.player.current.title}]({self.player.current.uri})')
-
-        print(f'''
-Current Page: {self.current_page}
-Current Position: {self.current_position}
-Current Direction: {direction}
-''')
-
-        # Add a few items in the playlist to the embed
-        if direction == 1:
-            limit = self.current_position + 5
-            while self.current_position < limit:
-                embed.add_field(name=f'Track {self.current_position + 1}:', value=queue[self.current_position], inline=False)
-                self.current_position += 1
-
-                # If the current count is greater than queue length
-                if self.current_position >= len(queue):
-                    break
-            self.current_page += 1
-        else:
-            limit = self.current_position - 5
-            while self.current_position < limit:
-                embed.add_field(name=f'Track {self.current_position + 1}:', value=queue[self.current_position], inline=False)
-                self.current_position -= 1
-
-                # If the current count is greater than queue length
-                if self.current_position <= len(queue):
-                    break
-            self.current_page -= 1
-
-        # Send the embed by updating the original message
-        await interaction.response.edit_message(embed=embed)
-        print('amogus')
-
-    @discord.ui.button(label='Previous', style=discord.ButtonStyle.primary)
-    async def previous(self, interaction: discord.Interaction, button: discord.Button):
-        await self.generateEmbed(interaction, -1)
-        #await interaction.response.edit_message(embed=embed)
-
-    @discord.ui.button(label='Next', style=discord.ButtonStyle.secondary)
-    async def next(self, interaction: discord.Interaction, button: discord.Button):
-        await self.generateEmbed(interaction, 1)
-        #embed = discord.Embed(title='Next Embed', description='ipsum dolor')
-        #await interaction.response.edit_message(embed=embed)
-
-
 class Music(commands.Cog, description="Commands relating to the voice chat music player."):
     def __init__(self, bot) -> None:
         self.bot = bot
@@ -316,7 +209,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
     # Command: Play
     @app_commands.command(name='play', description='Play a YouTube video in a voice chat. Syntax: "/play <URL or search term>"')
-    @app_commands.describe(query='The search term or YouTube video URL to play.')
+    @app_commands.describe(query='The search term or YouTube video or playlist URL to play.')
     async def play(self, interaction: discord.Interaction, *, query: str) -> None:
         # Check if maintenance mode is on
         if self.bot.maintenance_mode:
@@ -378,16 +271,16 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             )
 
             # Add five items in the playlist to the embed
-            limit: int = 5 if len(playlist_tracks) > 5 else len(playlist_tracks)
-            i: int = 0
+            limit: int = 6 if len(playlist_tracks) > 5 else len(playlist_tracks)
+            i: int = 1
             while i < limit:
-                embed.add_field(name=f'Track {i + 1}:', value=f'[{playlist_tracks[i].title}]({playlist_tracks[i].uri})',
+                embed.add_field(name=f'Track {i}:', value=f'[{playlist_tracks[i].title}]({playlist_tracks[i].uri})',
                                 inline=False)
                 i: int = i + 1
 
             # If playlist is greater than five tracks, add a notifying footer to the embed
             if len(playlist_tracks) > 5:
-                embed.set_footer(text=f'And {len(playlist_tracks) - 5} more tracks...')
+                embed.set_footer(text=f'And {len(playlist_tracks) - 6} more tracks...')
 
             # If there's already a song playing:
             if player.is_playing() or player.is_paused():
@@ -674,7 +567,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
     # Command: FastForward
     @app_commands.command(name='fastforward', description='Fast-forwards the player by a number of seconds. Syntax: "/fastforward [seconds to fastforward]"')
     @app_commands.describe(fastforward_time='The time, in seconds, to fast-forward.')
-    async def fastforward(self, interaction: discord.Interaction, fastforward_time: int = 10) -> None:
+    async def fastForward(self, interaction: discord.Interaction, fastforward_time: int = 10) -> None:
         # Check if maintenance mode is on
         if self.bot.maintenance_mode:
             return
@@ -751,7 +644,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             return
 
     # Command: Loop
-    @app_commands.command(name='loop', description='Loops the currently playing track.')
+    @app_commands.command(name='loop', description='Toggle looping the current track.')
     async def loop(self, interaction: discord.Interaction):
         # Check if maintenance mode is on
         if self.bot.maintenance_mode:
@@ -811,6 +704,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
     # Command: QueueRemove
     @app_commands.command(name='queueremove', description='Remove one or more items from the queue. Syntax: "/queueremove <index>" or "<index_start:index_end>"', )
+    @app_commands.describe(index='The index of the item to remove from queue, in the format "index," or "index start:index end."')
     async def queueRemove(self, interaction: discord.Interaction, index: str):
         # Check if maintenance mode is on
         if self.bot.maintenance_mode:
@@ -960,10 +854,9 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         # Log command usage
         return log.logCommand(interaction.user, interaction.command.name)
 
-    # TODO: Finish queue info command
-    # TODO: Eventually replace the page argument with buttons for navigating the pages
     # Command: QueueInfo
     @app_commands.command(name='queuelist', description='Shows a list of items in the queue. Syntax: "/queuelist (page)"')
+    @app_commands.describe(page='The page of the queue list to show. Defaults to one.')
     async def queueList(self, interaction: discord.Interaction, page: int = 1) -> None:
         # Check if maintenance mode is on
         if self.bot.maintenance_mode:
@@ -983,8 +876,8 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             return await interaction.response.send_message('The queue is currently empty.', ephemeral=True)
 
         # Create a var containing the maximum amount of pages, which is the queue length divided by 5 with no
-        # remainder, plus one
-        max_pages: int = (len(player.queue) // 5) + 1
+        # remainder, plus one, unless the length of the queue is 5 exactly, then it's hard set to one
+        max_pages: int = (len(player.queue) // 5) + 1 if len(player.queue) != 5 else 1
 
         # Check if the given page number is greater than the maximum amount of pages
         if page > max_pages:
@@ -1011,11 +904,34 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
                 inline=False
             )
 
+        # Set the footer to show current page, and max pages
+        embed.set_footer(text=f'Page {str(page)} of {str(max_pages)}')
+
         # Send the list
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
         # Log command usage
         return log.logCommand(interaction.user, interaction.command.name)
+
+    # Command: SkipTo
+    @app_commands.command(name='skipto', description='Skip to a specific song in queue.')
+    @app_commands.describe(index='The index of the song you want to skip to.')
+    @app_commands.describe(remove_preceding_songs='Whether you want to remove all songs preceding the specified song in the queue.')
+    async def skipTo(self, interaction: discord.Interaction, index: int, remove_preceding_songs: bool = False):
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
+            return
+
+        # Run checks
+        if not await runChecks(interaction):
+            return
+
+        # Check if player is running
+        player: wavelink.Player = await checkPlayer(interaction)
+        if not player:
+            return
+
+        return await interaction.response.send_message('This command is a work-in-progress!', ephemeral=True)
 
     # Command: Move
     @app_commands.command(name='move', description='Move the bot from one VC to another. Only usable by staff.')
