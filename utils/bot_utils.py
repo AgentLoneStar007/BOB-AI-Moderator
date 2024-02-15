@@ -59,3 +59,8 @@ async def checkIfOwner(interaction: discord.Interaction) -> bool:
         return False
     return True
 
+
+# Quick function to print a user's username and ID in console
+def loggingMention(member: discord.Member) -> str:
+    return f"@{member.display_name}(ID:{member.id})"
+

@@ -10,7 +10,13 @@ import json
 import os
 from dotenv import load_dotenv
 from utils.logger import Log, LogAndPrint
-from utils.bot_utils import sendMessage
+from utils.bot_utils import sendMessage, loggingMention
+from thefuzz import fuzz, process
+
+### DEBUG
+import time
+### DEBUG
+
 
 # Create object of Log and LogAndPrint class
 log = Log()
@@ -38,6 +44,26 @@ def exportBlockedWord(word: str) -> None:
     return
 
 
+# Function to change given word to Leetspeak
+def generateLeetspeakVariants(word) -> list:
+    leetspeak_variants: list = []
+
+    # Common Leetspeak letter translations
+    leet_mapping = {
+        'a': ['a', '4'],
+        'e': ['e', '3'],
+        'l': ['l', '1'],
+        'o': ['o', '0'],
+        't': ['t', '7'],
+    }
+
+    for char in word:
+        leetspeak_variants.extend(leet_mapping.get(char, [char]))
+
+    print(leetspeak_variants)
+    return leetspeak_variants
+
+
 # TODO: Add cool-downs to commands to prevent spamming(which may or may not work)
 # TODO: Add nuke prevention
 # TODO(maybe): Add server lock command
@@ -50,7 +76,6 @@ def exportBlockedWord(word: str) -> None:
 #  while BOB is offline, he won't detect the change and won't check for blocked words/images.
 # TODO: Add nickname scanning
 # TODO: Add command to remove a word or phrase from the blocklist
-# TODO: Update addblockedword command to be only usable by admins
 
 class Moderation(commands.GroupCog, description='Commands relating to moderation utilities.'):
     # Define vars
@@ -67,6 +92,16 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
         self.bot = bot
         super().__init__()
 
+        # Vars
+        self.leetspeak_translations = {
+            'a': ['4', '@'],
+            'e': ['3'],
+            'i': ['1', '!'],
+            'o': ['0'],
+            's': ['5', '$'],
+            't': ['7'],
+        }
+
     # Listener: On Ready
     @commands.Cog.listener()
     async def on_ready(self) -> None:
@@ -74,10 +109,12 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
         self.checkForNeededUnbans.start()
         return logandprint.info('Started background task "Check for Needed Unbans."')
 
-    # TODO: Add returns in this function as well
     # Listener: On Message
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message) -> None:
+        # DEBUG: Check function performance time
+        start_time = time.perf_counter()
+
         # Check if maintenance mode is on
         if self.bot.maintenance_mode:
             return
@@ -97,18 +134,79 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
 
         # Check if message has any attachments
         if message.attachments:
-            # If it does, append the file name of each attachment to a list
-            for x in message.attachments:
-                attachment_names.append(x.filename)
+            # If it does, make a string list of attachment names
+            for file in message.attachments:
+                attachment_names.append(file.filename)
 
-        # Use Regex formatting to search message for blocked words.
         # TODO: Add a system for "potentially bad" words or phrases that aren't deleted immediately, but the staff are
         #  notified of the message
-        # TODO: Go through the blocked words list(ughhh) and remove entries that could lead to false positives
-        message_content = re.sub(r'[^a-zA-Z0-9]', '', message.content.lower())
+
+        # Testing code; I will remove this
+        """
+        # Create a list of formatted variations for Leetspeak detection
+        formatted_variations = [message_content]
+        for letter, replacements in self.leetspeak_translations.items():
+            for replacement in replacements:
+                new_variation = message_content.replace(letter, replacement)
+                formatted_variations.append(new_variation)
+
+        # Create a list of the blocked words/phrases in Leetspeak
+        blocked_words_leet = []
         for blocked_word in self.blocked_words:
-            if re.search(rf'\b{re.escape(blocked_word)}\b', message_content):
-                original_message_content: str = message.content
+            blocked_words_leet.append(blocked_word)  # Add original word
+            for letter, replacements in self.leetspeak_translations.items():
+                for replacement in replacements:
+                    new_variation = blocked_word.replace(letter, replacement)
+                    blocked_words_leet.append(new_variation)
+
+        for variation in formatted_variations:
+            for blocked_word in blocked_words_leet:
+                # Check for matches in both original and Leetspeak variations
+                if blocked_word in variation:
+        
+
+        # TODO: Add a system for "potentially bad" words or phrases that aren't deleted immediately, but the staff are
+        #  notified of the message
+        """
+
+        async def handleBlockedPhrase(
+                blocked_phrase_is_in_file_name: bool = False,
+                blocked_file_name: str = ""
+        ) -> None:
+            # Get the message content
+            original_message_content: str = message.content
+
+            # Either way, delete the message
+            await message.delete()
+
+            # If the function is triggered to handle a blocked file name, do the following
+            if blocked_phrase_is_in_file_name:
+                # Notify staff of the infraction
+                await sendMessage(self.bot,
+                                  self.bot_output_channel,
+                                  f'User {message.author.mention} sent a message that had an attached '
+                                  'file with a name containing a blocked word or phrase in channel '
+                                  f'{message.channel.mention}.\n\n**The filename:** ||{blocked_file_name}||.')
+
+                notify_message: str = (f'{message.author.mention}, you sent a message with an attached file '
+                                       'that had a name containing a rule-breaking word or phrase. If this '
+                                       'is in error, reach out to the server staff using `/question`.'
+                                       f'\n\n**The filename:** `{blocked_file_name}`')
+
+                # If the message had text attached, attach the original message to the notify message, handling
+                # message length as needed in the one-line if statement
+                if message.content:
+                    notify_message = notify_message + '\n\n**Your original message:**\n' + (
+                        (message.content[:-200] + '...') if len(message.content) > 1800 else message.content)
+
+                # Notify the message author
+                await message.author.send(notify_message)
+
+                log_message: str = (f"User {loggingMention(message.author)} sent a message with an attached file that "
+                                    f"had a name containing a blocked word or phrase in channel #\"{message.channel.name}.\""
+                                    f" Triggering filename: \"{blocked_file_name}\"")
+            # Otherwise, handle just the text part of the message
+            else:
                 await sendMessage(
                     self.bot,
                     channel_id=self.bot_output_channel,
@@ -123,52 +221,49 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
                             f'\n||{(original_message_content[:-100] + "...") if len(original_message_content) > 1900 else original_message_content}||')
 
                 # Delete the message containing the blocked word, notify the user, and log the offense
-                await message.delete()
                 await message.author.send(
                     f"{message.author.mention}, your message contains a rule-breaking word or phrase. If this is in "
                     "error, please reach out to a moderator.")
-                logandprint.warning(f'User @{message.author} sent a message containing a blocked word or phrase '
-                                    f'in channel #{message.channel.name}. Triggering word: "{blocked_word}."', source='d')
+                log_message: str = (f"User {loggingMention(message.author)} sent a message containing a blocked word or"
+                                    f" phrase in channel #{message.channel.name}. Triggering word: \"{blocked_word}.\"")
 
-                # Stop checking for blocked words after the first word is found
+            logandprint.warning(log_message, source="d")
+
+            return
+
+        # Remove only whitespace from the message, and convert to lowercase
+        message_content: str = re.sub(r"[^\w\s]", "", message.content.lower().replace(" ", ""))
+        message_content_with_ints: str = re.sub(r"\W", "", message.content.lower().replace(" ", ""))
+
+        # Search for blocked words (raw text)
+        for blocked_word in self.blocked_words:
+            if blocked_word in message_content:
+                await handleBlockedPhrase()
                 return
 
             # Scan each file name as well
             if attachment_names:
+                for file_name in attachment_names:
+                    if blocked_word in file_name:
+                        await handleBlockedPhrase(blocked_phrase_is_in_file_name=True, blocked_file_name=file_name)
+                        return
+
+        # WORK ON!!
+        # Search for blocked words (Leetspeak)
+        for blocked_word in self.blocked_words:
+            leetspeak_variants = generateLeetspeakVariants(blocked_word)
+            for leetspeak_variant in leetspeak_variants:
+                match_score = fuzz.ratio(message_content_with_ints, leetspeak_variant)
+                if match_score >= 80:
+                    await handleBlockedPhrase()
+                    return
+
+            # Scan each file name as well
+            if attachment_names:
+                # This system of a for-loop inside a for-loop is kind of inefficient. I might fix it later.
                 for name in attachment_names:
-                    if re.search(rf'\b{re.escape(blocked_word)}\b', name):
-                        # Create a variable containing the filename with the blocked word/phrase
-                        blocked_name: str = name
-
-                        # Notify staff of the infraction
-                        await sendMessage(self.bot,
-                                          self.bot_output_channel,
-                                          f'User {message.author.mention} sent a message that had an attached '
-                                          'file with a name containing a blocked word or phrase in channel '
-                                          f'{message.channel.mention}.\n\n**The filename:**||{blocked_name}||.')
-
-                        # Delete the message
-                        await message.delete()
-
-                        notify_message: str = (f'{message.author.mention}, you sent a message with an attached file '
-                                               'that had a name containing a rule-breaking word or phrase. If this '
-                                               'is in error, reach out to the server staff using '
-                                               f'`/question`.\n\n**The filename in question: `{blocked_name}`')
-
-                        # If the message had text attached, attach the original message to the notify message, handling
-                        # message length as needed in the one-line if statement
-                        if message.content:
-                            notify_message = notify_message + '\n\n**Your original message:**\n' + ((message_content[:-200] + '...') if len(message.content) > 1800 else message_content)
-
-                        # Notify the message author
-                        await message.author.send(notify_message)
-
-                        # Log the infraction
-                        logandprint.warning(
-                            f'User {message.author.name} sent a message with an attached file that had a name '
-                            f'containing a blocked word or phrase in channel "{message.channel.name}."', source='d')
-
-                        # Stop checking
+                    if blocked_word in message_content:
+                        await handleBlockedPhrase(blocked_phrase_is_in_file_name=True)
                         return
 
         # TODO: Check message attachments here. If there are any, first scan the names using the system above and see
@@ -194,10 +289,15 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
                 if not await file_scanner_cog_instance.scanAttachedFiles(message):
                     return
 
+        # TODO: Fix the spam prevention system
         # Fourth scan: Spam prevention
-        spam_prevention_cog_instance = self.bot.get_cog('SpamPrevention')
-        if spam_prevention_cog_instance:
-            await spam_prevention_cog_instance.checkForSpam(message)
+        # spam_prevention_cog_instance = self.bot.get_cog('SpamPrevention')
+        # if spam_prevention_cog_instance:
+        #    await spam_prevention_cog_instance.checkForSpam(message)
+
+        end_time = time.perf_counter()  # Stop the timer
+        elapsed_time = end_time - start_time
+        logandprint.debug(f"Total time for message scan: {elapsed_time:.4f} seconds")
 
         return
 
@@ -352,9 +452,11 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
                                                     ephemeral=True)
             return logandprint.info(message, source='d')
         except discord.HTTPException as e:
-            await interaction.response.send_message(f'The following error occurred when trying to ban member {member.mention}: ```{e}```', ephemeral=True)
+            await interaction.response.send_message(
+                f'The following error occurred when trying to ban member {member.mention}: ```{e}```', ephemeral=True)
 
-            return logandprint.error(f'The following error occurred when trying to ban member {member.mention}: {e}', source='d')
+            return logandprint.error(f'The following error occurred when trying to ban member {member.mention}: {e}',
+                                     source='d')
 
     # Command: TempBan
     @app_commands.command(name='tempban', description=
@@ -400,14 +502,17 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
             await member.ban(reason=reason)
         except discord.HTTPException as e:
             return await interaction.response.send_message(
-                f'The following error occurred when trying to temporarily ban member {member.mention}: ```{e}```', ephemeral=True)
+                f'The following error occurred when trying to temporarily ban member {member.mention}: ```{e}```',
+                ephemeral=True)
 
         # Now log the temp ban in the #bot-output channel, and to file (probably more optimizing could be done here)
         await sendMessage(self.bot, self.bot_output_channel,
                           f'{member.mention}(ID: `{member.id}`) has been temporarily banned till <t:{unban_timestamp}:f> UTC. Reason: "{reason}".')
         await interaction.response.send_message(
             f'{member.mention} was temporarily banned. See <#{self.bot_output_channel}> for more info.', ephemeral=True)
-        return logandprint.info(f'{member.name}(ID: {member.id}) has been temporarily banned till {unban_time} UTC. Reason: "{reason}".', source='d')
+        return logandprint.info(
+            f'{member.name}(ID: {member.id}) has been temporarily banned till {unban_time} UTC. Reason: "{reason}".',
+            source='d')
 
     # Command: Unban
     @app_commands.command(name='unban', description='Unbans a user. Syntax: "/unban <user ID>"')
@@ -465,7 +570,8 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
                 await interaction.response.send_message('Deleted the last sent message.', ephemeral=True)
                 logandprint.info(logMessage)
             else:
-                await interaction.response.send_message(f'Deleted the last {len(deleted) - 1} messages.', ephemeral=True)
+                await interaction.response.send_message(f'Deleted the last {len(deleted) - 1} messages.',
+                                                        ephemeral=True)
                 logandprint.info(logMessage)
         else:
             # Log the attempted usage of the command
@@ -478,10 +584,12 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
                 logandprint.info(logMessage)
             return
 
+    # TODO: Make the commands relating to the blocked words list only usable by admins
     # Command: ReloadBlockedWords
-    @app_commands.command(name='reloadblockedwords', description='Reload the list of blocked words. (Only usable by staff.)')
+    @app_commands.command(name='reloadblockedwords',
+                          description='Reload the list of blocked words. (Only usable by staff.)')
     @app_commands.checks.has_permissions(manage_messages=True)
-    async def reloadblockedwords(self, interaction: discord.Interaction) -> None:
+    async def reloadBlockedWords(self, interaction: discord.Interaction) -> None:
         # Check if maintenance mode is on
         if self.bot.maintenance_mode:
             return
@@ -495,9 +603,11 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
                                                     f'\n```{e}```', ephemeral=True)
             return logandprint.error(f'Failed to reload blocked words list with the following error: {e}', source='d')
 
-    @app_commands.command(name='addblockedword', description='Add a blocked word or phrase to the blocked words list. (Only usable by staff.)')
-    @app_commands.checks.has_permissions()
-    async def addblockedword(self, interaction: discord.Interaction, blocked_word: str) -> None:
+    @app_commands.command(name='addblockedword',
+                          description='Add a blocked word or phrase to the blocked words list. (Only usable by staff.)')
+    @app_commands.describe(blocked_word='The word or phrase to add to the blocked words list.')
+    @app_commands.checks.has_permissions(manage_messages=True)
+    async def addBlockedWord(self, interaction: discord.Interaction, blocked_word: str) -> None:
         # Check if maintenance mode is on
         if self.bot.maintenance_mode:
             return
@@ -524,11 +634,13 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
                                     f'words list.', source='d')
 
         except Exception as e:
-            await interaction.response.send_message(f'The following error occurred when trying to add to the blocked words list: ```{e}```', ephemeral=True)
-            return logandprint.error(f'The following error occurred when user {interaction.user.name} tried to add to the blocked words list: {e}', source='d')
+            await interaction.response.send_message(
+                f'The following error occurred when trying to add to the blocked words list: ```{e}```', ephemeral=True)
+            return logandprint.error(
+                f'The following error occurred when user {interaction.user.name} tried to add to the blocked words list: {e}',
+                source='d')
 
 
 # Cog setup hook
 async def setup(bot):
     await bot.add_cog(Moderation(bot))
-

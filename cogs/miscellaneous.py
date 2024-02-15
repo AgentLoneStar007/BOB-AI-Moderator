@@ -171,9 +171,15 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
         try:
             # Try and sync bot commands
             synced = await self.bot.tree.sync()
+            # If zero commands were synced, format the message to notify that it's probably an error
+            if not synced:
+                await interaction.response.send_message('Synced no commands with Discord. If this is in error, check'
+                                                        'that all modules are loaded properly.', ephemeral=True)
+                return logandprint.warning('Synced no commands with Discord. If this is in error, check that'
+                                           'all modules are loaded properly.', source='d')
             # Make the message look good by correctly using an "s" after commands if there's more than one command
-            if len(synced) == 1:
-                message: str = f'Synced 1 command with Discord.'
+            elif len(synced) == 1:
+                message: str = f'Synced one command with Discord.'
             else:
                 message: str = f'Synced {len(synced)} commands with Discord.'
             await interaction.response.send_message(message, ephemeral=True)
@@ -185,7 +191,8 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
             return logandprint.error(message, source='d')
 
     # Command: Update
-    @app_commands.command(name='update', description='Update BOB by pulling latest changes from his Git repository. (Only usable by bot owner.)')
+    @app_commands.command(name='update',
+                          description='Update BOB by pulling latest changes from his Git repository. (Only usable by bot owner.)')
     async def update(self, interaction: discord.Interaction) -> None:
         # Check if maintenance mode is on
         if self.bot.maintenance_mode:

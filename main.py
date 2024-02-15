@@ -1,7 +1,7 @@
 # BOB-AI-Moderator
 # A Discord bot made in Python using Discord.py, by AgentLoneStar007
 # https://github.com/AgentLoneStar007
-import aiohttp.client_exceptions
+
 # Imports
 import discord
 import pretty_help
@@ -12,6 +12,8 @@ import wavelink
 from dotenv import load_dotenv
 import asyncio
 import os
+import aiohttp.client_exceptions
+from transformers import AutoModelForImageClassification
 from utils.load_extensions import loadExtensions
 from utils.logger import Log, LogAndPrint, initLoggingUtility
 from utils.bot_utils import defIntents, sendMessage
@@ -61,6 +63,20 @@ class Bot(commands.Bot):
         # Set maintenance mode var
         self.maintenance_mode: bool = False
         self.already_sent_maintenance_mode_notify = False
+
+        # Do some logging for AI models
+        logandprint.info("Loading data models. This might take a few moments for new models...")
+
+        # Load moderation AI models
+        ## NSFW Image Detection Model
+        model_name: str = "Falconsai/nsfw_image_detection"
+        self.moderation_model_nsfw_image_detection = AutoModelForImageClassification.from_pretrained(model_name)
+        logandprint.info(f"Finished loading model \"{model_name}.\"")
+
+        ##
+        #model_name = ""
+        #self.moderation_model_text_ = AutoModelForSequenceClassification.from_pretrained(model_name)
+        #logandprint.info(f"Finished loading model \"{model_name}.\"")
 
     # On bot ready...
     async def on_ready(self) -> None:
@@ -175,15 +191,23 @@ async def run() -> None:
         await loadExtensions(bot)
         await bot.start(BOT_TOKEN)
 
-# Start the bot
-if __name__ == "__main__":
+
+def main() -> int:
     # Put bot in a try/except for error handling
     try:
         asyncio.run(run())
     except KeyboardInterrupt:
         logandprint.info('Shutting down!')
+        return 0
     except aiohttp.client_exceptions.ClientConnectorError:
-        logandprint.fatal(f'B.O.B was unable to connect to either the Internet or Discord.')
+        logandprint.fatal(f'B.O.B was unable to connect to either the Internet or Discord. Check your connection.')
+        return 1
     except Exception as e:
         logandprint.fatal(f'B.O.B encountered a critical error and had to shut down! Error: {e}')
+        return 1
+
+
+# Start the bot
+if __name__ == "__main__":
+    main()
 

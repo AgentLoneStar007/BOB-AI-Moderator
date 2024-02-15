@@ -1,6 +1,13 @@
 discord
 python-dotenv
 discord-pretty-help
-wavelink==2.6.4
+wavelink
 vt-py
 requests
+transformers
+nltk
+aiohttp
+thefuzz
+torch
+torchvision
+torchaudio

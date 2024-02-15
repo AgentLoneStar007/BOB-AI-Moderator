@@ -1,6 +1,6 @@
 # Imports
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from utils.logger import Log, LogAndPrint
 import vt
 from dotenv import load_dotenv
@@ -38,7 +38,6 @@ class FileScanner(commands.Cog, description="Example cog description."):
     def __init__(self, bot) -> None:
         self.bot = bot
         self.client = vt.Client(VIRUS_TOTAL_API_KEY)
-        print(self.client)
         return
 
     # TODO: Make sure the ignorable_file_extensions list lines up with the list that will be in the image scanner to
@@ -55,6 +54,12 @@ class FileScanner(commands.Cog, description="Example cog description."):
     @commands.Cog.listener()
     async def on_ready(self) -> None:
         return logandprint.logCogLoad(self.__class__.__name__)
+
+    # Task: Clean Download Folder
+    @tasks.loop(minutes=5.0)
+    async def cleanDownloadFolder(self) -> None:
+        # TODO: Build downloads cleaner function
+        return
 
     # File scanner function
     async def scanAttachedFiles(self, message: discord.Message) -> bool:

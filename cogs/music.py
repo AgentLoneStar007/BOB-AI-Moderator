@@ -13,6 +13,7 @@ from utils.logger import Log, LogAndPrint
 #  Wavelink has audio leveling systems I can use)
 # TODO: Add a command to go to specific song in queue called /skipto
 # TODO: Find a way to prevent people from playing videos with blocked words in the title(maybe)
+# TODO: Add a command to loop the current queue called /loopqueue
 
 # Create object of Log and LogAndPrint class
 log = Log()
@@ -519,8 +520,8 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         if not await runChecks(interaction, user_in_different_vc_msg='You can only adjust the volume of the music if you\'re in the same voice channel as me.'):
             return
 
-        # Check if volume is in acceptable parameters
-        if 1 <= volume <= 100:
+        # Check if volume is in acceptable parameters (or if it's me, so I can set the volume to whatever I want)
+        if 1 <= volume <= 100 or interaction.user.id == self.bot.owner_id and volume >= 1:
             # Check if player is running
             player: wavelink.Player = await checkPlayer(interaction)
             if not player:
@@ -599,6 +600,8 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         await interaction.response.send_message(f'Fast-forwarded player to position `{convertDuration(position_to_ff_to)}`.', ephemeral=True)
         return log.logCommand(interaction.user, interaction.command.name)
 
+    # TODO: Fix bug in seek where it's stupidly needy on the formatting of the position. (Using /seek 0:00 doesn't work;
+    #  you have to use /seek 00:00, which is stupid.)
     # Command: Seek
     @app_commands.command(name='seek', description='Seek to a position in the currently playing track. Syntax: "/seek <position, in format (HH:)MM:SS>"')
     @app_commands.describe(position='The time to seek to in the track.')
@@ -932,6 +935,48 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             return
 
         return await interaction.response.send_message('This command is a work-in-progress!', ephemeral=True)
+
+        # Skip current song, if playing
+        await player.seek(player.current.duration * 1000)
+        # And unpause player, if paused
+        if player.is_paused():
+            await player.resume()
+
+        # WORK ON THE FOLLOWING; CODE IS NOT WORKING!
+
+        # If remove preceding songs, remove all songs before the specified song, including the specified song
+        if remove_preceding_songs:
+            track_to_seek_to = player.queue.__getitem__(index=index)
+            print(track_to_seek_to.title)
+
+            # (using index + 2 because +1 only goes to the number specified, and we need to go one number higher to
+            # remove the specified song from further in the queue)
+            for x in reversed(range(0, index)):
+                player.queue.__delitem__(x)
+
+            player.queue.put_at_front(track_to_seek_to)
+
+            # Send notifying message
+            await interaction.response.send_message(
+                f'Skipped to track [{track_to_seek_to.title}]({track_to_seek_to.uri}), removing preceeding items in queue.', ephemeral=True)
+
+        # Otherwise, just skip to the song without removing anything from queue
+        else:
+            # Get the track in the queue to skip to
+            track_to_seek_to = player.queue.__getitem__(index=index + 1)
+            print(type(track_to_seek_to))
+
+            # Put said track in the front of the queue
+            player.queue.put_at_front(track_to_seek_to)
+            # And delete the track from the queue
+            player.queue.__delitem__(index + 1)
+
+            # Send notifying message
+            await interaction.response.send_message(
+                f'Skipped to track [{track_to_seek_to.title}]({track_to_seek_to.uri}).', ephemeral=True)
+
+        # Log command usage
+        return log.logCommand(interaction.user, interaction.command.name)
 
     # Command: Move
     @app_commands.command(name='move', description='Move the bot from one VC to another. Only usable by staff.')
