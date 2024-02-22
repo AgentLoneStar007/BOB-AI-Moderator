@@ -10,12 +10,16 @@ import json
 import os
 from dotenv import load_dotenv
 from utils.logger import Log, LogAndPrint
-from utils.bot_utils import sendMessage, loggingMention
-from thefuzz import fuzz, process
+from utils.bot_utils import sendMessage, loggingMention, checkIfAdmin, prettyPrintInt
+from thefuzz import fuzz
+import nltk
+import concurrent.futures
 
 ### DEBUG
 import time
-### DEBUG
+import sys
+
+###
 
 
 # Create object of Log and LogAndPrint class
@@ -34,34 +38,139 @@ def loadBlockedWords() -> list:
     return blocked_words
 
 
-# TODO: Add handling if the last item in the blocked words list already has a newline character
-def exportBlockedWord(word: str) -> None:
-    blocked_words: list = loadBlockedWords()
-    with open('data/moderation/blocked_words.txt', 'a') as file:
-        file.write('\n' + word)
+def loadWhitelistedWords() -> list:
+    with open('data/moderation/whitelisted_words.txt', 'r') as file:
+        lines = file.readlines()
+        # ha ha spaghetti code go brrrr
+        whitelisted_words = [line.strip().replace(' ', '').lower() for line in lines]
         file.close()
 
-    return
+    return whitelisted_words
+
+
+def exportBlockedWord(word: str) -> int:
+    # Get the current list of whitelisted words
+    whitelisted_words: list = loadWhitelistedWords()
+    blocked_words: list = loadBlockedWords()
+
+    # Stop and return one if the blocked word is already whitelisted
+    if word in whitelisted_words:
+        return 1
+
+    # Stop and return two if the blocked word is already in the blocklist
+    if word in blocked_words:
+        return 2
+
+    # Run some cleanup
+    del whitelisted_words
+    del blocked_words
+
+    # Check and see if a newline characters is needed at the end of the list
+    with open('data/moderation/blocked_words.txt', 'rb') as file:
+        file.seek(-1, 2)  # Move the cursor to the second-to-last byte of the file
+        if file.read(1).decode('utf-8') == '\n':  # Read the last byte as a character
+            file_ends_with_newline_char: bool = True
+        else:
+            file_ends_with_newline_char: bool = False
+        file.close()
+
+    # Export the provided word to the blocked words file
+    with open('data/moderation/blocked_words.txt', 'a') as file:
+        if file_ends_with_newline_char:
+            file.write(word)
+        else:
+            file.write('\n' + word)
+        file.close()
+
+    # Return zero if there are no issues
+    return 0
+
+
+def exportWhitelistedWord(word: str) -> int:
+    # Get the current list of blocked words
+    blocked_words: list = loadBlockedWords()
+    whitelisted_words: list = loadWhitelistedWords()
+
+    # Stop and return one if the whitelisted word is already in the blocklist
+    if word in blocked_words:
+        return 1
+
+    # Stop and return two if the whitelisted word is already in the whitelist
+    if word in whitelisted_words:
+        return 2
+
+    # Run some cleanup
+    del blocked_words
+    del whitelisted_words
+
+    with open('data/moderation/whitelisted_words.txt', 'rb') as file:
+        file.seek(-1, 2)  # Move the cursor to the second-to-last byte of the file
+        if file.read(1).decode('utf-8') == '\n':  # Read the last byte as a character
+            file_ends_with_newline_char: bool = True
+        else:
+            file_ends_with_newline_char: bool = False
+        file.close()
+
+    # Export the provided word to the whitelisted words file
+    with open('data/moderation/whitelisted_words.txt', 'a') as file:
+        if file_ends_with_newline_char:
+            file.write(word)
+        else:
+            file.write('\n' + word)
+        file.close()
+
+    # Return if there are no issues
+    return 0
 
 
 # Function to change given word to Leetspeak
-def generateLeetspeakVariants(word) -> list:
-    leetspeak_variants: list = []
-
-    # Common Leetspeak letter translations
-    leet_mapping = {
-        'a': ['a', '4'],
-        'e': ['e', '3'],
-        'l': ['l', '1'],
-        'o': ['o', '0'],
-        't': ['t', '7'],
+def generateLeetspeakVariants(word: str) -> dict:
+    # Create a dictionary of all Leetspeak character replacements
+    leet_replacements: dict = {
+        "a": ["4", "@"],
+        "b": ["8"],
+        "e": ["3"],
+        "f": ["ph"],
+        "i": ["1", "|"],
+        "l": ["1", "|"],
+        "o": ["0", "Ꭴ"],
+        "s": ["5", "$"],
+        "t": ["7"],
     }
 
-    for char in word:
-        leetspeak_variants.extend(leet_mapping.get(char, [char]))
+    leetspeak_variants: dict = {}
+    current_variants: list = [word]
 
-    print(leetspeak_variants)
+    for i, char in enumerate(word.lower()):
+        replacements: list = leet_replacements.get(char, [char])
+
+        # Generate new variants with and without replacements
+        new_variants: list = []
+        for variant in current_variants:
+            for replacement in replacements + [char]:  # Include original character
+                new_variants.append(variant[:i] + replacement + variant[i + 1:])
+
+        # Update current variants for the next iteration
+        current_variants = new_variants
+
+    # Add final variants to the dictionary with the original word as the key
+    leetspeak_variants[word] = current_variants
+
+    # Some quick redneck engineering to remove duplicates
+    temp_set: set = set(leetspeak_variants[word])
+    leetspeak_variants[word] = list(temp_set)
+    del temp_set
+
     return leetspeak_variants
+
+
+# Function to turn a string into a list of words
+def tokenize(text: str) -> list:
+    # Convert the input to lowercase and remove all characters but letters, numbers, and whitespace
+    text: str = re.sub(r"[^a-zA-Z0-9\s]", "", text)
+    # Tokenize into words
+    tokens = nltk.word_tokenize(text)
+    return tokens
 
 
 # TODO: Add cool-downs to commands to prevent spamming(which may or may not work)
@@ -76,38 +185,110 @@ def generateLeetspeakVariants(word) -> list:
 #  while BOB is offline, he won't detect the change and won't check for blocked words/images.
 # TODO: Add nickname scanning
 # TODO: Add command to remove a word or phrase from the blocklist
+# TODO: Make moderation system even smarter by taking into context previous messages to see if user is trying to
+#  bypass moderation system by typing blocked word across two messages
 
 class Moderation(commands.GroupCog, description='Commands relating to moderation utilities.'):
     # Define vars
     load_dotenv()
     blocked_words: list = loadBlockedWords()
+    whitelisted_words: list = loadWhitelistedWords()
     bot_output_channel: str = os.getenv("BOT_OUTPUT_CHANNEL")
-    user_message_counts_1: dict = {}
-    user_message_counts_2: dict = {}
-    user_message_counts_3: dict = {}
-    message_reset_interval: int = 30  # in seconds
-    message_limit: int = 7  # message limit per reset interval
 
     def __init__(self, bot) -> None:
         self.bot = bot
         super().__init__()
 
         # Vars
-        self.leetspeak_translations = {
-            'a': ['4', '@'],
-            'e': ['3'],
-            'i': ['1', '!'],
-            'o': ['0'],
-            's': ['5', '$'],
-            't': ['7'],
-        }
+        self.leet_variant_dict: dict = {}
+        self.triggering_blocked_word: str = ""
+        self.triggering_word: str = ""
+
+    def scanText(self, text_input: str) -> bool:
+        """
+        A function that scans an input string to see if it contains
+        a blocked word or phrase. Returns True if one is found, and
+        False if not.
+
+        Example:\n
+        if scanText("input text"):
+            print("Blocked text found.")
+
+        :param text_input: The text to scan.
+        :returns: True, False
+        :raises None:
+        """
+
+        # Update these vars
+        self.triggering_word = ""
+        self.triggering_blocked_word = ""
+
+        # Search for blocked words (raw text)
+        for blocked_word in self.blocked_words:
+            # Convert the message to a list of strings
+            for word in tokenize(text_input):
+                # If the fuzzy-matching score is higher than 80 and the word is not whitelisted, mark it as blocked
+                if fuzz.ratio(word, blocked_word) >= 80 and not (word in self.whitelisted_words):
+                    # Update class vars as needed
+                    self.triggering_blocked_word = blocked_word
+                    self.triggering_word = word
+                    return True
+
+        # Search for blocked words (Leetspeak)
+
+        # This function tests the input string against every Leetspeak variant
+        # of the blocked words dictionary
+        def runScan(string_input: str) -> bool:
+            # For every key in the dictionary,
+            for blocked_word_key in self.leet_variant_dict:
+                # And for every item in the list, which is the key's value
+                for leet_variant in self.leet_variant_dict[blocked_word_key]:
+                    # If the fuzzy-matching ratio score is higher than 80, mark it as blocked
+                    if fuzz.ratio(string_input, leet_variant) >= 80:
+                        self.triggering_blocked_word = blocked_word_key
+                        self.triggering_word = string_input
+                        return True  # Stop after a blocked word is found
+            return False
+
+        # The following system splits the task of comparing tokens from the input message or file name to
+        # Leetspeak variants of blocked words into multiple threads. This massively speeds up the
+        # process, which otherwise would take over 17 seconds for 300+ blocked words using a set, and
+        # multiple minutes for the same amount of blocked words and their variants stored in a list.
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            tokens: list = tokenize(text_input)
+            results: list = list(executor.map(runScan, tokens))
+
+            if True in results and not (self.triggering_word in self.whitelisted_words):
+                return True
+
+        # Return false if no blocked words are found in the input
+        return False
 
     # Listener: On Ready
     @commands.Cog.listener()
     async def on_ready(self) -> None:
         logandprint.logCogLoad(self.__class__.__name__)
+
+        # Start background task(s)
         self.checkForNeededUnbans.start()
-        return logandprint.info('Started background task "Check for Needed Unbans."')
+        logandprint.info('Started background task "Check for Needed Unbans."')
+
+        ## The following two functions are put here and not in __init__ to prevent them from
+        ## loading again when the cog is reloaded. (There's no need to reload them.)
+
+        # Download/load needed libraries for word_tokenize()
+        punkt_path = os.path.join(os.path.expanduser('~'), 'nltk_data/tokenizers/punkt.zip')
+        if not os.path.exists(punkt_path):
+            nltk.download("punkt")
+
+        # Pre-cache the Leetspeak variants list
+        logandprint.debug("Pre-caching Leetspeak variants of blocked words. (This may take a moment.)")
+        for word in self.blocked_words:
+            self.leet_variant_dict.update(generateLeetspeakVariants(word))
+
+        logandprint.debug(f"Done! Size of list: {float((sys.getsizeof(self.leet_variant_dict)) / 1048576):.2f} Mb")
+
+        return
 
     # Listener: On Message
     @commands.Cog.listener()
@@ -141,34 +322,6 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
         # TODO: Add a system for "potentially bad" words or phrases that aren't deleted immediately, but the staff are
         #  notified of the message
 
-        # Testing code; I will remove this
-        """
-        # Create a list of formatted variations for Leetspeak detection
-        formatted_variations = [message_content]
-        for letter, replacements in self.leetspeak_translations.items():
-            for replacement in replacements:
-                new_variation = message_content.replace(letter, replacement)
-                formatted_variations.append(new_variation)
-
-        # Create a list of the blocked words/phrases in Leetspeak
-        blocked_words_leet = []
-        for blocked_word in self.blocked_words:
-            blocked_words_leet.append(blocked_word)  # Add original word
-            for letter, replacements in self.leetspeak_translations.items():
-                for replacement in replacements:
-                    new_variation = blocked_word.replace(letter, replacement)
-                    blocked_words_leet.append(new_variation)
-
-        for variation in formatted_variations:
-            for blocked_word in blocked_words_leet:
-                # Check for matches in both original and Leetspeak variations
-                if blocked_word in variation:
-        
-
-        # TODO: Add a system for "potentially bad" words or phrases that aren't deleted immediately, but the staff are
-        #  notified of the message
-        """
-
         async def handleBlockedPhrase(
                 blocked_phrase_is_in_file_name: bool = False,
                 blocked_file_name: str = ""
@@ -176,7 +329,7 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
             # Get the message content
             original_message_content: str = message.content
 
-            # Either way, delete the message
+            # Delete the message
             await message.delete()
 
             # If the function is triggered to handle a blocked file name, do the following
@@ -186,7 +339,10 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
                                   self.bot_output_channel,
                                   f'User {message.author.mention} sent a message that had an attached '
                                   'file with a name containing a blocked word or phrase in channel '
-                                  f'{message.channel.mention}.\n\n**The filename:** ||{blocked_file_name}||.')
+                                  f'{message.channel.mention}.\n\n**The filename:** ||{blocked_file_name}||.\n\n**Triggering'
+                                  f' word in blocklist:** ||{self.triggering_blocked_word}||\n\nRemember, if this is'
+                                  f' an error, you can add words and phrases to the whitelist using `/moderation'
+                                  f' addwhitelistedword <word>`.')
 
                 notify_message: str = (f'{message.author.mention}, you sent a message with an attached file '
                                        'that had a name containing a rule-breaking word or phrase. If this '
@@ -204,7 +360,8 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
 
                 log_message: str = (f"User {loggingMention(message.author)} sent a message with an attached file that "
                                     f"had a name containing a blocked word or phrase in channel #\"{message.channel.name}.\""
-                                    f" Triggering filename: \"{blocked_file_name}\"")
+                                    f" Triggering filename: \"{blocked_file_name}\". Triggering blocked word or "
+                                    f"phrase: \"{self.triggering_blocked_word}\"")
             # Otherwise, handle just the text part of the message
             else:
                 await sendMessage(
@@ -212,59 +369,40 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
                     channel_id=self.bot_output_channel,
                     message=f'User {message.author.mention} sent a message containing one or more blocked words or '
                             f'phrases in channel {message.channel.mention}.\n\n**Original message:**'
-                            # What the following spaghetti code does is if the message is more than 1,900 characters,
-                            # it cuts off the last 100 characters and appends three dots. If the message is not over
-                            # 1,900 characters, it prints the entire message. The || at the start and finish is to
-                            # mark the message as a spoiler, meaning the server staff don't have to read the message
-                            # if they don't want to. I set it to 100 characters to account for the possible length of
-                            # a nickname, since "message.author.mention" is used.
-                            f'\n||{(original_message_content[:-100] + "...") if len(original_message_content) > 1900 else original_message_content}||')
+                    # What the following spaghetti code does is if the message is more than 1,900 characters,
+                    # it cuts off the last 100 characters and appends three dots. If the message is not over
+                    # 1,900 characters, it prints the entire message. The || at the start and finish is to
+                    # mark the message as a spoiler, meaning the server staff don't have to read the message
+                    # if they don't want to. I set it to 100 characters to account for the possible length of
+                    # a nickname, since "message.author.mention" is used.
+                            f'\n||{(original_message_content[:-200] + "...") if len(original_message_content) > 1800 else original_message_content}||'
+                            f'\n\n**The triggering word:** ||{self.triggering_word}||\n\n**Triggering word in blocklist:** ||{self.triggering_blocked_word}||'
+                            '\n\nRemember, if this is an error, you can add words and phrases to the whitelist using `/moderation addwhitelistedword <word>`.')
 
                 # Delete the message containing the blocked word, notify the user, and log the offense
                 await message.author.send(
                     f"{message.author.mention}, your message contains a rule-breaking word or phrase. If this is in "
-                    "error, please reach out to a moderator.")
+                    "error, please reach out to the server staff using `/question`.")
                 log_message: str = (f"User {loggingMention(message.author)} sent a message containing a blocked word or"
-                                    f" phrase in channel #{message.channel.name}. Triggering word: \"{blocked_word}.\"")
+                                    f" phrase in channel #{message.channel.name}. Triggering word in message: \"{self.triggering_word}.\" Triggering word in blocklist: \"{self.triggering_blocked_word}\"")
 
             logandprint.warning(log_message, source="d")
 
             return
 
         # Remove only whitespace from the message, and convert to lowercase
-        message_content: str = re.sub(r"[^\w\s]", "", message.content.lower().replace(" ", ""))
-        message_content_with_ints: str = re.sub(r"\W", "", message.content.lower().replace(" ", ""))
+        message_content: str = re.sub(r"[^\w\s]", "", message.content.lower().replace("_", " ").replace("-", " ").replace(".", " "))
+        message_content_with_ints: str = re.sub(r"\W", "", message.content.lower().replace("_", " ").replace("-", " ").replace(".", " "))
 
-        # Search for blocked words (raw text)
-        for blocked_word in self.blocked_words:
-            if blocked_word in message_content:
-                await handleBlockedPhrase()
-                return
+        # Scan the message
+        if self.scanText(message_content) or self.scanText(message_content_with_ints):
+            return await handleBlockedPhrase()
 
-            # Scan each file name as well
-            if attachment_names:
-                for file_name in attachment_names:
-                    if blocked_word in file_name:
-                        await handleBlockedPhrase(blocked_phrase_is_in_file_name=True, blocked_file_name=file_name)
-                        return
-
-        # WORK ON!!
-        # Search for blocked words (Leetspeak)
-        for blocked_word in self.blocked_words:
-            leetspeak_variants = generateLeetspeakVariants(blocked_word)
-            for leetspeak_variant in leetspeak_variants:
-                match_score = fuzz.ratio(message_content_with_ints, leetspeak_variant)
-                if match_score >= 80:
-                    await handleBlockedPhrase()
-                    return
-
-            # Scan each file name as well
-            if attachment_names:
-                # This system of a for-loop inside a for-loop is kind of inefficient. I might fix it later.
-                for name in attachment_names:
-                    if blocked_word in message_content:
-                        await handleBlockedPhrase(blocked_phrase_is_in_file_name=True)
-                        return
+        # And the attachment names as well
+        if attachment_names:
+            for file_name in attachment_names:
+                if self.scanText(file_name):
+                    return await handleBlockedPhrase(blocked_phrase_is_in_file_name=True, blocked_file_name=file_name)
 
         # TODO: Check message attachments here. If there are any, first scan the names using the system above and see
         #  if they contain blocked words. (Delete the message and stop scans if they do.) If they pass, then check if
@@ -283,11 +421,12 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
                 if not await image_scanner_cog_instance.scanImage(message):
                     return
 
+            # TODO: Finish the file scanner
             # Third scan: Scan files for viruses
-            file_scanner_cog_instance = self.bot.get_cog('FileScanner')
-            if file_scanner_cog_instance:
-                if not await file_scanner_cog_instance.scanAttachedFiles(message):
-                    return
+            # file_scanner_cog_instance = self.bot.get_cog('FileScanner')
+            # if file_scanner_cog_instance:
+            #    if not await file_scanner_cog_instance.scanAttachedFiles(message):
+            #        return
 
         # TODO: Fix the spam prevention system
         # Fourth scan: Spam prevention
@@ -302,9 +441,9 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
         return
 
     # TODO: Finish the status checking system by adding an auto-kick system after a certain amount of time has passed
-    # Listener: On Member Update
+    # Listener: On Presence Update
     @commands.Cog.listener()
-    async def on_presence_update(self, before, after) -> None:
+    async def on_presence_update(self, before: discord.Member, after: discord.Member) -> None:
         # Ignore updates from bots
         if before.bot:
             return
@@ -315,30 +454,74 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
 
         # Check user status to see if it's changed
         if before.activity != after.activity:
-            user_status: str = str(after.activity)
-            user_status: str = re.sub(r'[^a-zA-Z0-9]', '', user_status.lower())
+            status: str = re.sub(r"[^\w\s]", "",str(after.activity).lower().replace("_", " ").replace("-", " ").replace(".", " "))
+            status_with_ints: str = re.sub(r"\W", "",str(after.activity).lower().replace("_", " ").replace("-", " ").replace(".", " "))
 
-            for blocked_word in self.blocked_words:
-                if re.search(rf'\b{re.escape(blocked_word)}\b', user_status):
-                    # Notify the user of their infraction
-                    await after.send(f'{after.mention}, your status contains a rule-breaking word or phrase.'
-                                     ' If this is in error, please reach out to a moderator using `/question`.'
-                                     'If you do not update your status, you will be kicked or banned from the server.')
+            if self.scanText(status) or self.scanText(status_with_ints):
+                await after.send(f"{after.mention}, your status contains a rule-breaking word or phrase."
+                                 " If this is in error, please reach out to the server staff using `/question`."
+                                 " If you do not update your status, you will be kicked or banned from the server.")
 
-                    # Notify moderators of the rule-breaking status
-                    await sendMessage(self.bot, channel_id=self.bot_output_channel,
-                                      message=f'User {after.mention} has a status containing a blocked word or phrase.')
+                # Notify moderators of the rule-breaking status
+                await sendMessage(self.bot, channel_id=self.bot_output_channel,
+                                  message=f"User {after.mention} has a status containing a blocked word or phrase."
+                                          f"\n\n**Triggering word:** ||{self.triggering_word}||\n\n**Triggering word in"
+                                          f" blocklist:** ||{self.triggering_blocked_word}||")
 
-                    # Log the offense to console and logfile
-                    logandprint.warning(f'User {after.display_name} has a status containing a blocked word or phrase.',
-                                        source='d')
+                # Log the offense to console and logfile
+                logandprint.warning(f"User {loggingMention(after)} has a status containing a blocked word or phrase. Triggering word: \"{self.triggering_word}.\" Triggering word in blocklist: \"{self.triggering_blocked_word}.\"",
+                                    source='d')
 
-                    # Stop checking for blocked words after the first word is found
-                    break
-
-            # Return if no bad words found
+            # Stop if no blocked words found
             return
-        # Return if status is unchanged
+
+        # Stop if status is unchanged
+        return
+
+    # Listener: On Member Update
+    @commands.Cog.listener()
+    async def on_member_update(self, before: discord.Member, after: discord.Member) -> None:
+        # Ignore updates from bots
+        if before.bot:
+            return
+
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
+            return
+
+        # TODO: Add handling for guild avatar update in this listener
+
+        # Check user nickname to see if it's changed
+        if before.nick != after.nick:
+            # Create the formatted nickname variables using Regex
+            nick: str = re.sub(r"[^\w\s]", "",after.nick.lower().replace("_", " ").replace("-", " ").replace(".", " "))
+            nick_with_ints: str = re.sub(r"\W", "",after.nick.lower().replace("_", " ").replace("-", " ").replace(".", " "))
+
+            if self.scanText(nick) or self.scanText(nick_with_ints):
+                await after.send(f"{after.mention}, your nickname contains a rule-breaking word or phrase."
+                                 " If this is in error, please reach out to the server staff using `/question`."
+                                 " If you do not update your nickname, you will be kicked or banned from the server.")
+
+                # Notify moderators of the rule-breaking status
+                await sendMessage(self.bot, channel_id=self.bot_output_channel,
+                                  message=f"User {after.mention} has a nickname containing a blocked word or phrase."
+                                          f"\n\n**Triggering word:** ||{self.triggering_word}||\n\n**Triggering word in"
+                                          f" blocklist:** ||{self.triggering_blocked_word}||")
+
+                # Log the offense to console and logfile
+                logandprint.warning(f"User {loggingMention(after)} has a nickname containing a blocked word or phrase. Triggering word: \"{self.triggering_word}.\" Triggering word in blocklist: \"{self.triggering_blocked_word}.\"",
+                                    source='d')
+
+            # Stop if no blocked words are found
+            return
+
+        # Stop if there's no change
+        return
+
+    # Listener: On User Update
+    @commands.Cog.listener()
+    async def on_user_update(self, before: discord.Member, after: discord.Member) -> None:
+        # Just putting this listener here for handling username and avatar updates
         return
 
     # Task: Check for users needing to be unbanned
@@ -584,7 +767,6 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
                 logandprint.info(logMessage)
             return
 
-    # TODO: Make the commands relating to the blocked words list only usable by admins
     # Command: ReloadBlockedWords
     @app_commands.command(name='reloadblockedwords',
                           description='Reload the list of blocked words. (Only usable by staff.)')
@@ -594,17 +776,73 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
         if self.bot.maintenance_mode:
             return
 
+        # Check is the user is an admin or greater
+        if not checkIfAdmin(interaction):
+            return interaction.response.send_message("You have to be an administrator or greater to use this command!",
+                                                     ephemeral=True)
+
         try:
+            # Reload the blocked words list
             self.blocked_words = loadBlockedWords()
-            await interaction.response.send_message('Blocked words reloaded!', ephemeral=True)
-            return logandprint.info(f'User {interaction.user.name} reloaded blocked words list.', source='d')
+
+            # Notify of the success
+            await interaction.response.send_message("Reloaded blocked words list. Updating pre-cache of Leetspeak"
+                                                    " variants. (This may take a moment depending on the size of the"
+                                                    " blocked words list.)", ephemeral=True)
+
+            # Update Leetspeak variants pre-cache
+            logandprint.debug("Updating pre-cache of Leetspeak variants of blocked words. (This may take a moment.)")
+            for word in self.blocked_words:
+                self.leet_variant_dict.update(generateLeetspeakVariants(word))
+            logandprint.debug("Done!")
+
+            # Get the total amount of blocked word Leetspeak variants
+            total_length: str = prettyPrintInt(int(sum(len(lst) for lst in self.leet_variant_dict.values())))
+
+            # Update notification
+            await interaction.edit_original_response(
+                content=f"Done! Loaded a total of {prettyPrintInt(len(self.blocked_words))} blocked words list and "
+                        f"cached {total_length} Leetspeak variants.")
+
+            # Log the reload
+            return logandprint.info(f'User {loggingMention(interaction.user)} reloaded blocked words list.', source='d')
         except Exception as e:
-            await interaction.response.send_message('Failed to reload blocked words list with the following error:'
-                                                    f'\n```{e}```', ephemeral=True)
-            return logandprint.error(f'Failed to reload blocked words list with the following error: {e}', source='d')
+            await interaction.response.send_message("Failed to reload blocked words list with the following error:"
+                                                    f"\n```{e}```", ephemeral=True)
+            return logandprint.error(f"Failed to reload blocked words list with the following error: {e}", source='d')
+
+    # Command: ReloadWhitelistedWords
+    @app_commands.command(name='reloadwhitelistedwords',
+                          description='Reload the list of blocked words. (Only usable by staff.)')
+    @app_commands.checks.has_permissions(manage_messages=True)
+    async def reloadWhitelistedWords(self, interaction: discord.Interaction) -> None:
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
+            return
+
+        # Check is the user is an admin or greater
+        if not checkIfAdmin(interaction):
+            return interaction.response.send_message(
+                "You have to be an administrator or greater to use this command!",
+                ephemeral=True)
+
+        try:
+            # Reload the whitelisted words list
+            self.whitelisted_words = loadWhitelistedWords()
+
+            # Notify of success
+            await interaction.response.send_message("Reloaded whitelisted words list successfully.", ephemeral=True)
+
+            # Log the reload
+            return logandprint.info(f'User {loggingMention(interaction.user)} reloaded whitelisted words.', source='d')
+        except Exception as e:
+            await interaction.response.send_message("Failed to reload whitelisted words with the following error:"
+                                                    f"\n```{e}```", ephemeral=True)
+            return logandprint.error(f"Failed to reload whitelisted words with the following error: {e}",
+                                     source='d')
 
     @app_commands.command(name='addblockedword',
-                          description='Add a blocked word or phrase to the blocked words list. (Only usable by staff.)')
+                          description='Add a blocked word or phrase to the blocked words list. (Only usable by administrators.)')
     @app_commands.describe(blocked_word='The word or phrase to add to the blocked words list.')
     @app_commands.checks.has_permissions(manage_messages=True)
     async def addBlockedWord(self, interaction: discord.Interaction, blocked_word: str) -> None:
@@ -612,33 +850,80 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
         if self.bot.maintenance_mode:
             return
 
-        try:
-            # Add the word to the list
-            exportBlockedWord(blocked_word)
+        # Check if the user is an admin or greater
+        if not checkIfAdmin(interaction):
+            return interaction.response.send_message("You have to be an administrator or greater to use this command!",
+                                                     ephemeral=True)
 
-            # Reload blocked words
-            self.blocked_words = loadBlockedWords()
+        return_value: int = exportBlockedWord(blocked_word)
 
-            # Notify of success
-            await interaction.response.send_message(f'Added ||{blocked_word}|| to blocklist.', ephemeral=True)
+        # If the return value is one, the word is already on the whitelist
+        if return_value == 1:
+            await interaction.response.send_message(f"Failed to export the word \"{blocked_word}\" to the "
+                                                    f"blocked words list because it's already on the whitelisted words list.",
+                                                    ephemeral=True)
+            return log.error(f"User {loggingMention(interaction.user)} failed to add word "
+                             f"\"{blocked_word}\" to the blocked words list because it's already on the whitelist.",
+                             source="d")
 
-            # Censor the blocked word or phrase for logging
-            if len(blocked_word) < 2:
-                censored_blocked_word: str = blocked_word
-            else:
-                censored_blocked_word: str = blocked_word[0] + '*' * (len(blocked_word) - 2) + blocked_word[-1]
+        # If the return value is two, the word is already on the blocklist
+        elif return_value == 2:
+            await interaction.response.send_message(f"Failed to export the word \"{blocked_word}\" to the blocked words"
+                                                    " list because it's already blocked.", ephemeral=True)
+            return log.error(f"User {loggingMention(interaction.user)} failed to add word \"{blocked_word}\" to the"
+                             "blocklist because it's already blocked.")
 
-            # Log and print the word being added
-            log.debug(f'Added word "{blocked_word}" to blocked words list.', source='d')
-            return logandprint.info(f'User {interaction.user} added word "{censored_blocked_word}" to blocked '
-                                    f'words list.', source='d')
+        # Reload blocked words
+        self.blocked_words = loadBlockedWords()
 
-        except Exception as e:
-            await interaction.response.send_message(
-                f'The following error occurred when trying to add to the blocked words list: ```{e}```', ephemeral=True)
-            return logandprint.error(
-                f'The following error occurred when user {interaction.user.name} tried to add to the blocked words list: {e}',
-                source='d')
+        # Notify of success
+        await interaction.response.send_message(f'Added ||{blocked_word}|| to blocklist.', ephemeral=True)
+
+        # Log and print the word being added
+        log.debug(f"Added word \"{blocked_word}\" to blocked words list.", source='d')
+        return logandprint.info(f"User {interaction.user} added word \"{blocked_word}\" to blocked "
+                                f"words list.", source='d')
+
+    @app_commands.command(name='addwhitelistedword',
+                          description="Adds a whitelisted word or phrase to the whitelist. (Only usable by administrators.)")
+    @app_commands.describe(whitelisted_word="The word or phrase to add to the whitelisted words list.")
+    @app_commands.checks.has_permissions(manage_messages=True)
+    async def addWhitelistedWord(self, interaction: discord.Interaction, whitelisted_word: str) -> None:
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
+            return
+        # Check if the user is an admin or greater
+        if not checkIfAdmin(interaction):
+            return await interaction.response.send_message("You have to be an administrator or greater to use this command!",
+                                                     ephemeral=True)
+
+        return_value: int = exportWhitelistedWord(whitelisted_word)
+
+        # If the return value is one, the word is already on the block list
+        if return_value == 1:
+            await interaction.response.send_message(f"Failed to export the word \"{whitelisted_word}\" to the "
+                                                    f"whitelisted words list because it's already on the blocked words list!",
+                                                    ephemeral=True)
+            return log.error(f"User {loggingMention(interaction.user)} failed to add word "
+                             f"\"{whitelisted_word}\" to the whitelist because it's already on the blocklist.",
+                             source="d")
+
+        # If the return value is two, the word is already on the whitelist
+        elif return_value == 2:
+            await interaction.response.send_message(f"Failed to export the word \"{whitelisted_word}\" to the whitelist"
+                                                    " because it's already whitelisted.", ephemeral=True)
+            return log.error(f"User {loggingMention(interaction.user)} failed to add word \"{whitelisted_word}\" to the"
+                             "whitelist because it's already whitelisted.")
+
+        # Reload whitelisted words
+        self.whitelisted_words = loadWhitelistedWords()
+
+        # Notify of success
+        await interaction.response.send_message(f'Added \"{whitelisted_word}\" to whitelist.', ephemeral=True)
+
+        # Log and print the word being added
+        return logandprint.info(f'User {loggingMention(interaction.user)} added word "{whitelisted_word}" to '
+                                'whitelisted words.', source='d')
 
 
 # Cog setup hook

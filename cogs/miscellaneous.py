@@ -75,7 +75,7 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
             await self.bot.load_extension(f'cogs.{cog_name}')
             await interaction.response.send_message(
                 f'The cog "{cog_name.title().replace("_", " ")}" was successfully mounted and started.', ephemeral=True)
-            return logandprint.debug(f'Loaded the cog "{cog_name}" successfully.')
+            return logandprint.info(f'Loaded the cog "{cog_name}" successfully.')
         # Throw an error if failed
         except commands.ExtensionError as e:
             # Throw a specific error if the cog can't be found
@@ -111,7 +111,7 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
         try:
             await self.bot.unload_extension(f'cogs.{cog_name}')
             await interaction.response.send_message(f'The cog "{cog_name.title().replace("_", " ")}" was successfully unloaded.', ephemeral=True)
-            return logandprint.debug(f'The cog "{cog_name}" was unloaded.')
+            return logandprint.info(f'The cog "{cog_name}" was unloaded.')
 
         # Throw an error if unloading the cog fails
         except commands.ExtensionError as e:
@@ -143,7 +143,7 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
             await self.bot.reload_extension(f'cogs.{cog_name}')
             await interaction.response.send_message(f'The cog "{cog_name.title().replace("_", " ")}" was successfully reloaded.',
                                                            ephemeral=True)
-            return logandprint.debug(f'Reloaded cog "{cog_name}."')
+            return logandprint.info(f'Reloaded cog "{cog_name}."')
 
         # Throw an error if failed
         except commands.ExtensionError as e:

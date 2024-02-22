@@ -14,9 +14,8 @@ import asyncio
 import os
 import aiohttp.client_exceptions
 from transformers import AutoModelForImageClassification
-from utils.load_extensions import loadExtensions
 from utils.logger import Log, LogAndPrint, initLoggingUtility
-from utils.bot_utils import defIntents, sendMessage
+from utils.bot_utils import defIntents, sendMessage, loadExtensions
 
 # Vars
 load_dotenv()
@@ -72,11 +71,6 @@ class Bot(commands.Bot):
         model_name: str = "Falconsai/nsfw_image_detection"
         self.moderation_model_nsfw_image_detection = AutoModelForImageClassification.from_pretrained(model_name)
         logandprint.info(f"Finished loading model \"{model_name}.\"")
-
-        ##
-        #model_name = ""
-        #self.moderation_model_text_ = AutoModelForSequenceClassification.from_pretrained(model_name)
-        #logandprint.info(f"Finished loading model \"{model_name}.\"")
 
     # On bot ready...
     async def on_ready(self) -> None:

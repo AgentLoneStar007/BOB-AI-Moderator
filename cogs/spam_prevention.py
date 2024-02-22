@@ -17,9 +17,9 @@ logandprint = LogAndPrint()
 class SpamPrevention(commands.Cog, description="Prevents users from sending large amounts of messages at once."):
     # Define vars
     bot_output_channel = '1155842466482753656'
-    user_message_counts_1 = {}
-    user_message_counts_2 = {}
-    user_message_counts_3 = {}
+    user_message_counts_1: dict = {}
+    user_message_counts_2: dict = {}
+    user_message_counts_3: dict = {}
     message_reset_interval = 30  # in seconds
     message_limit = 7  # message limit per reset interval
 
