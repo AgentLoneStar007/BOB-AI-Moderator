@@ -165,3 +165,4 @@ data/moderation/*
 data/update_files/*
 data/reaction_images/*
 downloads/*
+test.py

@@ -19,7 +19,7 @@ his code.
   - [ ] Advanced Auto-Mod Systems
     - [ ] On-Demand/Automatic File Scanning and Video Scanning 
   - [ ] AI-Powered Auto-Mod Systems
-    - [ ] AI-Powered Image Scanning System
+    - [x] AI-Powered Image Scanning System
     - [ ] AI-Powered Contextually-Aware Auto-Mod System
 - [ ] Music Player
   - [x] Basic Music Player
@@ -37,6 +37,9 @@ his code.
   - [ ] More stuff I'll think of later
 - [ ] Funny Stuff
   - [ ] I'll think of funny stuff to add later
+
+Note on the AI image scanner: It's a work-in-progress. Currently, it has known support for GIFs and SVGs, but support
+for other media formats isn't guaranteed till I test them all
 
 ### License
 This project is licensed under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 

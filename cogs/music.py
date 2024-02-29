@@ -40,10 +40,10 @@ def convertDuration(milliseconds) -> str:
     return formatted_time
 
 
-def checkIfTimeFormatValid(input_str) -> bool:
+def checkIfTimeFormatValid(input_str: str) -> bool:
     # Regular expression patterns for HH:MM:SS and MM:SS formats
-    hh_mm_ss_pattern = r'^\d{2}:\d{2}:\d{2}$'
-    mm_ss_pattern = r'^\d{2}:\d{2}$'
+    hh_mm_ss_pattern = r'^(0?[0-9]|1[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$'
+    mm_ss_pattern = r'^(0?[0-9]|1[0-9]|2[0-3]):[0-5][0-9]$'
 
     # Check if the input matches either pattern
     if re.match(hh_mm_ss_pattern, input_str) or re.match(mm_ss_pattern, input_str):
@@ -52,12 +52,10 @@ def checkIfTimeFormatValid(input_str) -> bool:
         return False
 
 
-# TODO: Add data type declarations to hh_mm... and mm_ss.. vars
-def timeToMilliseconds(time_str) -> int:
+def timeToMilliseconds(time_str: str) -> int:
     # Regular expression pattern for HH:MM:SS and MM:SS formats
-    hh_mm_ss_pattern = r'^(\d{2}):(\d{2}):(\d{2})$'
-    mm_ss_pattern = r'^(\d{2}):(\d{2})$'
-    logandprint.debug(f'Type: {type(hh_mm_ss_pattern)}, {type(mm_ss_pattern)}')
+    hh_mm_ss_pattern: str = r"^(0?[0-9]|1[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$"
+    mm_ss_pattern: str = r"^(0?[0-9]|1[0-9]|2[0-3]):[0-5][0-9]$"
 
     # Check if the input matches either pattern
     hh_mm_ss_match = re.match(hh_mm_ss_pattern, time_str)
@@ -69,9 +67,10 @@ def timeToMilliseconds(time_str) -> int:
     elif mm_ss_match:
         minutes, seconds = map(int, mm_ss_match.groups())
         total_seconds = minutes * 60 + seconds
-    # TODO: Maybe remove the following, because I don't think error handling is required for this function.
     else:
-        raise ValueError(f'Invalid time format in timeToMilliseconds function in {__name__}. Use HH:MM:SS or MM:SS.')
+        raise ValueError(f"Invalid time format in timeToMilliseconds function in {__name__}. Use HH:MM:SS or MM:SS."
+                         f" Hours and minutes don't need to be padded with a zero.")
+    print("amogus")
 
     # Convert total seconds to milliseconds
     milliseconds: int = total_seconds * 1000
@@ -379,7 +378,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
                 await interaction.response.send_message(embed=embed, ephemeral=True)
 
         # Log the usage of the command
-        return log.logCommand(interaction.user, interaction.command.name)
+        return log.logCommand(interaction)
 
     # Command: Skip
     @app_commands.command(name='skip', description='Skips to the next song in queue. Stops the player if there are no songs left.')
@@ -413,7 +412,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             await interaction.response.send_message('Playback was stopped because there are no remaining songs in the queue.', ephemeral=True)
 
             # Log the command
-            return log.logCommand(interaction.user, interaction.command.name)
+            return log.logCommand(interaction)
 
         # Skip current song in queue
         await player.seek(player.current.duration * 1000)
@@ -455,7 +454,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         self.current_track = None
 
         await interaction.response.send_message('Stopped music playback.', ephemeral=True)
-        return log.logCommand(interaction.user, interaction.command.name)
+        return log.logCommand(interaction)
 
     # Command: Pause
     @app_commands.command(name='pause', description='Pauses the player.')
@@ -481,7 +480,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         # Pause the player
         await player.pause()
         await interaction.response.send_message('Playback paused.', ephemeral=True)
-        return log.logCommand(interaction.user, interaction.command.name)
+        return log.logCommand(interaction)
 
     # Command: Resume
     @app_commands.command(name='resume', description='Resumes the player, if paused.')
@@ -506,7 +505,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         # Resume the player
         await player.resume()
         await interaction.response.send_message('Playback resumed.', ephemeral=True)
-        return log.logCommand(interaction.user, interaction.command.name)
+        return log.logCommand(interaction)
 
     # Command: Volume
     @app_commands.command(name='volume', description='Adjusts the volume of the music player. Syntax: "/volume <volume>"')
@@ -530,7 +529,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             # Set volume
             await player.set_volume(volume)
             await interaction.response.send_message(f'Volume of player adjusted to `{volume}`.', ephemeral=True)
-            return log.logCommand(interaction.user, interaction.command.name)
+            return log.logCommand(interaction)
         else:
             # Send error message
             await interaction.response.send_message('Volume must be between one and 100.', ephemeral=True)
@@ -559,11 +558,11 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             # Restart song playback
             await player.seek(0)
             await interaction.response.send_message('Restarted playback.', ephemeral=True)
-            return log.logCommand(interaction.user, interaction.command.name)
+            return log.logCommand(interaction)
         position_to_rewind_to = int(player.position - rewind_time)
         await player.seek(position_to_rewind_to)
         await interaction.response.send_message(f'Rewound player to position `{convertDuration(position_to_rewind_to)}`.', ephemeral=True)
-        return log.logCommand(interaction.user, interaction.command.name)
+        return log.logCommand(interaction)
 
     # Command: FastForward
     @app_commands.command(name='fastforward', description='Fast-forwards the player by a number of seconds. Syntax: "/fastforward [seconds to fastforward]"')
@@ -589,16 +588,16 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             if player.queue.is_empty:
                 await interaction.response.send_message('Stopping playback because there\'s no more songs in the queue.', ephemeral=True)
                 await player.stop()
-                return log.logCommand(interaction.user, interaction.command.name)
+                return log.logCommand(interaction)
 
             await player.play(player.queue.get())
             await interaction.response.send_message('Skipping to next song in queue.', ephemeral=True)
-            return log.logCommand(interaction.user, interaction.command.name)
+            return log.logCommand(interaction)
 
         position_to_ff_to = int(player.position + ff_time)
         await player.seek(position_to_ff_to)
         await interaction.response.send_message(f'Fast-forwarded player to position `{convertDuration(position_to_ff_to)}`.', ephemeral=True)
-        return log.logCommand(interaction.user, interaction.command.name)
+        return log.logCommand(interaction)
 
     # TODO: Fix bug in seek where it's stupidly needy on the formatting of the position. (Using /seek 0:00 doesn't work;
     #  you have to use /seek 00:00, which is stupid.)
@@ -622,28 +621,33 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         # If the input is in the correct format
         if checkIfTimeFormatValid(position):
             # Define vars
-            time_to_seek = timeToMilliseconds(position)
-            current_player_time = player.position
-            current_player_length = player.current.length
+            time_to_seek: int = timeToMilliseconds(position)
+            print(time_to_seek)
+            current_player_time: float = player.position
+            print(current_player_time)
+            current_player_length: int = player.current.length
+            print(current_player_length)
 
             # If the position is not less than zero or greater than the video length
-            if not 0 <= time_to_seek < current_player_length:
-                await interaction.response.send_message('The seek-to position must not be longer than the video, or less than zero.', ephemeral=True)
+            if not 0 < time_to_seek < current_player_length:
+                await interaction.response.send_message("The seek-to position must not be longer than the video, or"
+                                                        " less than zero.", ephemeral=True)
                 return
 
             # Seek to the position, and send a corresponding message
             await player.seek(time_to_seek)
+            print("amogus")
             if time_to_seek > current_player_time:
-                await interaction.response.send_message(f'Fast-forwarded to `{position}` in video.', ephemeral=True)
+                await interaction.response.send_message(f"Fast-forwarded to `{position}` in video.", ephemeral=True)
             else:
-                await interaction.response.send_message(f'Re-winded video to `{position}`.', ephemeral=True)
+                await interaction.response.send_message(f"Re-winded video to `{position}`.", ephemeral=True)
 
             # Log command usage
-            return log.logCommand(interaction.user, interaction.command.name)
+            return log.logCommand(interaction)
 
         else:
-            await interaction.response.send_message('Invalid position to seek to. Check command help page with '
-                           '"/help seek" for more information.', ephemeral=True)
+            await interaction.response.send_message("Invalid position to seek to. Check command help page with "
+                                                    "`/help seek` for more information.", ephemeral=True)
             return
 
     # Command: Loop
@@ -675,7 +679,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             await interaction.response.send_message('Disabled looping of current track.', ephemeral=True)
 
         # Log the command usage
-        return log.logCommand(interaction.user, interaction.command.name)
+        return log.logCommand(interaction)
 
     # Command: Shuffle
     @app_commands.command(name='shuffle', description='Shuffle the tracks in the queue.')
@@ -703,7 +707,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             return await interaction.response.send_message('There are not enough items in the queue to shuffle.', ephemeral=True)
 
         # Log the command usage
-        return log.logCommand(interaction.user, interaction.command.name)
+        return log.logCommand(interaction)
 
     # Command: QueueRemove
     @app_commands.command(name='queueremove', description='Remove one or more items from the queue. Syntax: "/queueremove <index>" or "<index_start:index_end>"', )
@@ -806,7 +810,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
                 await interaction.response.send_message(f'Removed {count} items from queue.', ephemeral=True)
 
         # Log the command usage
-        return log.logCommand(interaction.user, interaction.command.name)
+        return log.logCommand(interaction)
 
     # Command: PlayerInfo
     @app_commands.command(name='playerinfo', description='Shows information regarding the current track and queue.')
@@ -855,7 +859,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
         # Log command usage
-        return log.logCommand(interaction.user, interaction.command.name)
+        return log.logCommand(interaction)
 
     # Command: QueueInfo
     @app_commands.command(name='queuelist', description='Shows a list of items in the queue. Syntax: "/queuelist (page)"')
@@ -914,7 +918,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
         # Log command usage
-        return log.logCommand(interaction.user, interaction.command.name)
+        return log.logCommand(interaction)
 
     # Command: SkipTo
     @app_commands.command(name='skipto', description='Skip to a specific song in queue.')
@@ -976,7 +980,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
                 f'Skipped to track [{track_to_seek_to.title}]({track_to_seek_to.uri}).', ephemeral=True)
 
         # Log command usage
-        return log.logCommand(interaction.user, interaction.command.name)
+        return log.logCommand(interaction)
 
     # Command: Move
     @app_commands.command(name='move', description='Move the bot from one VC to another. Only usable by staff.')
@@ -1012,7 +1016,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         await interaction.response.send_message(f'Moved to voice channel "{user_vc.channel.name}."', ephemeral=True)
 
         # Log command usage
-        return log.logCommand(interaction.user, interaction.command.name)
+        return log.logCommand(interaction)
 
 
 # Cog setup hook

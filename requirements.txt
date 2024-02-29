@@ -11,3 +11,5 @@ thefuzz
 torch
 torchvision
 torchaudio
+cairocffi
+cairosvg

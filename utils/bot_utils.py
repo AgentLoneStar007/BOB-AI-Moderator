@@ -83,6 +83,7 @@ async def checkIfOwner(interaction: discord.Interaction) -> bool:
     return True
 
 
+# TODO: Fix this check (it isn't working)
 # A function that checks if the user of an app command is an administrator
 def checkIfAdmin(interaction: discord.Interaction) -> bool:
     """

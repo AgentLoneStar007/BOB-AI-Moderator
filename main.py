@@ -63,15 +63,6 @@ class Bot(commands.Bot):
         self.maintenance_mode: bool = False
         self.already_sent_maintenance_mode_notify = False
 
-        # Do some logging for AI models
-        logandprint.info("Loading data models. This might take a few moments for new models...")
-
-        # Load moderation AI models
-        ## NSFW Image Detection Model
-        model_name: str = "Falconsai/nsfw_image_detection"
-        self.moderation_model_nsfw_image_detection = AutoModelForImageClassification.from_pretrained(model_name)
-        logandprint.info(f"Finished loading model \"{model_name}.\"")
-
     # On bot ready...
     async def on_ready(self) -> None:
         # Print a message to the console and log ready event
@@ -164,10 +155,11 @@ async def run() -> None:
                   ' on cooldown.', source='d')
             return await interaction.response.send_message(f'This command is on cooldown!', ephemeral=True)
 
+        # TODO: Add a specific error message when the bot is unable to respond to an interaction because it timed out.
         # Handler for failing to respond to an interaction quickly enough
         if isinstance(error, discord.app_commands.CommandInvokeError):
-            return logandprint.warning(f'Failed to respond to command "{interaction.command.name}" run by'
-                         f' {interaction.user.display_name} because the interaction either timed out or failed. Error: {error}', source='d')
+            return logandprint.error(f"Failed to respond to command \"{interaction.command.name}\" run by"
+                         f" {interaction.user.display_name} because the interaction either timed out or failed. Error: {error}", source='d')
 
         # So far no other handlers are required, because AppCommands automatically requires correct argument types
         # and "CommandNotFound" errors are (to my knowledge) impossible with slash commands.

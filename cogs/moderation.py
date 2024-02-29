@@ -203,6 +203,13 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
         self.leet_variant_dict: dict = {}
         self.triggering_blocked_word: str = ""
         self.triggering_word: str = ""
+        self.image_file_types: set = {".svg", ".ico", ".jpg", ".webp", ".jpeg", ".hdr", ".bmp", ".dds", ".gif", ".cur",
+                                      ".psd", ".tiff", ".tga", ".avif", ".rgb", ".xpim", ".heic", ".ppm", ".rgba",
+                                      ".exr", ".jfif", ".wbmp", ".pgm", ".xbm", ".jp2", ".pcx", ".jbg", ".heif", ".map",
+                                      ".pdb", ".picon", ".pnm", ".jpe", ".jif", ".jps", ".pbm", ".g3", ".yuv", ".pict",
+                                      ".ras", ".pal", ".g4", ".pcd", ".sixel", ".rgf", ".sgi", ".six", ".mng", ".jbig",
+                                      ".xv", ".xwd", ".fts", ".vips", ".ipl", ".pct", ".hrz", ".pfm", ".pam", ".uyvy",
+                                      ".otb", ".mtv", ".viff", ".fax", ".pgx", ".sun", ".palm", ".rgbo", ".jfi"}
 
     def scanText(self, text_input: str) -> bool:
         """
@@ -417,16 +424,38 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
             # first)
             image_scanner_cog_instance = self.bot.get_cog('ImageScanner')
             if image_scanner_cog_instance:
-                # If media scanner returns False, media did not pass the scan.
-                if not await image_scanner_cog_instance.scanImage(message):
-                    return
+                try:
+                    result = await image_scanner_cog_instance.scanImage(message=message)
+                    # If the media was deemed NSFW,
+                    if result:
+                        # Delete the message,
+                        await message.delete()
+
+                        # Notify the author
+                        await message.author.send(f"{message.author.mention}, your message had media attached that was"
+                                                  f" deemed NSFW and was therefore removed. If this is in error, please"
+                                                  f" reach out to the server staff using `/question`.")
+
+                        # And notify staff
+                        await sendMessage(self.bot,
+                                          self.bot_output_channel,
+                                          f"User {message.author.mention}sent a message with media attached"
+                                          " that was deemed NSFW.")
+
+                        # Stop if the message has been deleted; no further scans are needed
+                        return
+
+                except Exception as error:
+                    await sendMessage(self.bot, self.bot_output_channel,
+                                      f"Failed to scan attached media from user {message.author.mention} in"
+                                      f" channel #{message.channel.name} with the following error:```{error}```")
 
             # TODO: Finish the file scanner
             # Third scan: Scan files for viruses
             # file_scanner_cog_instance = self.bot.get_cog('FileScanner')
             # if file_scanner_cog_instance:
-            #    if not await file_scanner_cog_instance.scanAttachedFiles(message):
-            #        return
+            #    if await file_scanner_cog_instance.scanAttachedFiles(message):
+            #        ...handle virus
 
         # TODO: Fix the spam prevention system
         # Fourth scan: Spam prevention
