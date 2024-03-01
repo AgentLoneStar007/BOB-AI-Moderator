@@ -200,6 +200,9 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
         super().__init__()
 
         # Vars
+        self.image_scanner_cog_instance = self.bot.get_cog('ImageScanner')
+        self.file_scanner_cog_instance = self.bot.get_cog('FileScanner')
+        self.spam_prevention_cog_instance = self.bot.get_cog('SpamPrevention')
         self.leet_variant_dict: dict = {}
         self.triggering_blocked_word: str = ""
         self.triggering_word: str = ""
@@ -420,12 +423,11 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
         #  prevention system. This should be the best and most fool-proof system.
 
         if message.attachments:
-            # Second scan: Scan images for bad content (this is the second scan because scanning for blocked words is
+            # Second scan: Scan images for NSFW content (this is the second scan because scanning for blocked words is
             # first)
-            image_scanner_cog_instance = self.bot.get_cog('ImageScanner')
-            if image_scanner_cog_instance:
+            if self.image_scanner_cog_instance:
                 try:
-                    result = await image_scanner_cog_instance.scanImage(message=message)
+                    result = await self.image_scanner_cog_instance.scanImage(message=message)
                     # If the media was deemed NSFW,
                     if result:
                         # Delete the message,
@@ -442,6 +444,10 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
                                           f"User {message.author.mention}sent a message with media attached"
                                           " that was deemed NSFW.")
 
+                        # Log the removal
+                        logandprint.warning(f"User {loggingMention(message.author)} sent a message with media"
+                                            f" attached that was deemed NSFW.", source='d')
+
                         # Stop if the message has been deleted; no further scans are needed
                         return
 
@@ -452,14 +458,12 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
 
             # TODO: Finish the file scanner
             # Third scan: Scan files for viruses
-            # file_scanner_cog_instance = self.bot.get_cog('FileScanner')
             # if file_scanner_cog_instance:
             #    if await file_scanner_cog_instance.scanAttachedFiles(message):
             #        ...handle virus
 
         # TODO: Fix the spam prevention system
         # Fourth scan: Spam prevention
-        # spam_prevention_cog_instance = self.bot.get_cog('SpamPrevention')
         # if spam_prevention_cog_instance:
         #    await spam_prevention_cog_instance.checkForSpam(message)
 
@@ -519,6 +523,8 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
             return
 
         # TODO: Add handling for guild avatar update in this listener
+        if before.guild_avatar != after.guild_avatar:
+            ...
 
         # Check user nickname to see if it's changed
         if before.nick != after.nick:
@@ -550,7 +556,21 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
     # Listener: On User Update
     @commands.Cog.listener()
     async def on_user_update(self, before: discord.Member, after: discord.Member) -> None:
-        # Just putting this listener here for handling username and avatar updates
+        # If the user's avatar has changed, scan it
+        if before.avatar != after.avatar:
+            try:
+                if await self.image_scanner_cog_instance.scanImage(image_url=after.avatar.url):
+                    # Notify the user
+                    await after.send(f"{after.mention}, your avatar has been deemed NSFW. If this is in error, please reach"
+                                     " out to the server staff using `/question`. If you do not update your profile"
+                                     " picture, you will be kicked or banned from the server.")
+
+                    # Notify server staff
+                    await sendMessage(self.bot, self.bot_output_channel, f"User {after.mention} has a profile picture that has been deemed NSFW.")
+            # Handle if there was an error
+            except Exception as error:
+                logandprint.error(f"Failed to scan user {loggingMention(after)}'s avatar with the following"
+                                  f"error: {error}", source='d')
         return
 
     # Task: Check for users needing to be unbanned
@@ -603,7 +623,6 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
 
                     # Return with log to console and file
                     return logandprint.info(message, source='d')
-
                 else:
                     # If the user can't be found, log it to Discord, console, and file
                     message = f'User {member.display_name}\'s temporary ban has expired, but the user could not be found to be unbanned.'

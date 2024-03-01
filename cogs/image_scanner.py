@@ -16,7 +16,7 @@ log = Log()
 logandprint = LogAndPrint()
 
 
-class ImageScanner(commands.Cog, description="Example cog description."):
+class ImageScanner(commands.Cog, description="Everything relating to the NSFW image detection system."):
     def __init__(self, bot) -> None:
         self.bot = bot
 
@@ -24,7 +24,7 @@ class ImageScanner(commands.Cog, description="Example cog description."):
         self.model = pipeline("image-classification", model="Falconsai/nsfw_image_detection")
 
         # Vars
-        self.detection_gate: float = 0.2
+        self.detection_gate: float = 0.1
         self.image_file_types: set = {".svg", ".ico", ".jpg", ".webp", ".jpeg", ".hdr", ".bmp", ".dds", ".gif", ".cur",
                                       ".psd", ".tiff", ".tga", ".avif", ".rgb", ".xpim", ".heic", ".ppm", ".rgba",
                                       ".exr", ".jfif", ".wbmp", ".pgm", ".xbm", ".jp2", ".pcx", ".jbg", ".heif", ".map",
@@ -40,28 +40,40 @@ class ImageScanner(commands.Cog, description="Example cog description."):
     async def on_ready(self) -> None:
         return logandprint.logCogLoad(self.__class__.__name__)
 
-    async def scanImage(self, image_url: str = "", message: discord.Message = None) -> bool:
+    async def scanImage(self,
+                        image_url: str = "",
+                        message: discord.Message = None,
+                        avatar: discord.Member.avatar = None
+                        ) -> bool:
         """
-        Scans an image or images, depending on whether `image_url` or `message_attachments`
-        is used. (Only one can be used.)
+        Scans an image or images, depending on whether `image_url`, `message_attachments`, or `avatar`
+        is used. (Only one can be used, however.)
 
-        :param image_url: The URL, if any, to the image.
-        :param message: A Discord message object, which attachments and message ID can be pulled from.
+        :param image_url: The URL to an image.
+        :param message: A Discord message object, which attachments can be pulled from.
+        :param avatar: A Discord avatar object.
         :returns: True if the given image is NSFW. False otherwise.
         :raises ValueError: If neither nor both arguments are given. Only one can be used.
+        :raises RequestException: If an image couldn't be downloaded for scanning.
         :raises PIL.UnidentifiedImageError: If the image cannot be opened. Mainly for debug purposes.
         """
 
         # Vars
         folder_name: str = ""
 
-        # Prevent usage of both arguments
-        if image_url and message:
-            raise ValueError("Only one argument can be used for the scanImage() function, but two were provided.")
+        # Prevent usage of more than one argument
+        used_arguments: int = sum(1 for arg in (image_url, message, avatar) if arg is not None) > 1
+        if used_arguments > 1:
+            raise ValueError(f"Only one argument can be used for the scanImage() function, but {used_arguments}"
+                             "were provided.")
 
-        # And neither arguments
+        # Cleanup
+        del used_arguments
+
+        # And prevent using neither arguments
         if not image_url and not message:
-            raise ValueError("At least one argument must be used for the scanImage() function, but neither were provided.")
+            raise ValueError("At least one argument must be used for the scanImage() function, but neither were"
+                             "provided.")
 
         if image_url:
             # Create a unique ID for the folder's name
@@ -144,8 +156,6 @@ class ImageScanner(commands.Cog, description="Example cog description."):
                 except Exception as error:
                     raise UnidentifiedImageError(f"Failed to open an image for scanning with the following error: {error}")
 
-                print(float(self.model(img)[1]["score"]))
-
                 # Scan the image and see if it's above the detection gate
                 if float(self.model(img)[1]["score"]) >= self.detection_gate:
                     return True
@@ -224,6 +234,81 @@ class ImageScanner(commands.Cog, description="Example cog description."):
                     # Scan the image and see if it's above the detection gate
                     if float(self.model(img)[1]["score"]) >= self.detection_gate:
                         return True
+
+        elif avatar:
+            # Create a unique ID for the folder's name
+            timestamp: int = int(time())
+            random_int: str = os.urandom(4).hex()
+            folder_name = f"{timestamp}{random_int}"
+            del timestamp, random_int
+
+            # Create the folder in the downloads directory
+            os.mkdir(f"downloads/{folder_name}")
+
+            # Download the avatar
+            await avatar.save(Path(f"downloads/{folder_name}/{os.path.basename(avatar.url)}"))
+
+            logandprint.debug(f"Downloaded avatar {os.path.basename(avatar.url)} for scanning.",
+                              source='d')
+
+            # Get the path of the image
+            image_path: str = f"downloads/{folder_name}/{os.path.basename(avatar.url)}"
+
+            # Path to handle gifs
+            if image_path.endswith(".gif"):
+                # Create a list of all the results of the images to be used later
+                results: list = [float]
+                # Open the image object
+                img = ImageSequence.Iterator(Image.open(image_path))
+
+                # Save each frame of the GIF to the folder
+                i = 0
+                for frame in img:
+                    frame = frame.convert("RGB")
+                    frame.save(f"downloads/{folder_name}/frame_{i + 1}.png")
+                    i += 1
+
+                # Scan each image in the folder
+                for png_image in os.listdir(f"downloads/{folder_name}"):
+                    # Prevent scanning the pre-existing GIF as well
+                    if not png_image.endswith(".png"):
+                        continue
+                    image = Image.open(f"downloads/{folder_name}/{png_image}")
+                    # And append each result to the results list
+                    results.append(float(self.model(image)[1]["score"]))
+
+                # Check to see if any of the results are too high
+                for result in results:
+                    if result >= self.detection_gate:
+                        return True
+
+            # Path to handle SVGs
+            elif image_path.endswith(".svg"):
+                # Convert the SVG to a PNG
+                with open(image_path, 'rb') as svg_file, open(f"downloads/{folder_name}/temp_image.png",
+                                                              'wb') as file:
+                    cairosvg.svg2png(file_obj=svg_file, write_to=file)
+
+                # Open the PNG as an object
+                img = Image.open(f"downloads/{folder_name}/temp_image.png")
+
+                # Scan it and see if it's above the detection gate
+                if float(self.model(img)[1]["score"]) >= self.detection_gate:
+                    return True
+
+            # Basic path to handle all other file extensions
+            else:
+                # The following is in a try/except block, so I can get the error output from PIL. This allows me to
+                # add more support for different image types in the future.
+                try:
+                    img = Image.open(image_path)
+                except Exception as error:
+                    raise UnidentifiedImageError(
+                         f"Failed to open an image for scanning with the following error: {error}")
+
+                # Scan the image and see if it's above the detection gate
+                if float(self.model(img)[1]["score"]) >= self.detection_gate:
+                    return True
 
         # Delete the directory if it exists
         if folder_name:
