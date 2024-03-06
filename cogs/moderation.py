@@ -15,12 +15,6 @@ from thefuzz import fuzz
 import nltk
 import concurrent.futures
 
-### DEBUG
-import time
-import sys
-
-###
-
 
 # Create object of Log and LogAndPrint class
 log = Log()
@@ -206,13 +200,6 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
         self.leet_variant_dict: dict = {}
         self.triggering_blocked_word: str = ""
         self.triggering_word: str = ""
-        self.image_file_types: set = {".svg", ".ico", ".jpg", ".webp", ".jpeg", ".hdr", ".bmp", ".dds", ".gif", ".cur",
-                                      ".psd", ".tiff", ".tga", ".avif", ".rgb", ".xpim", ".heic", ".ppm", ".rgba",
-                                      ".exr", ".jfif", ".wbmp", ".pgm", ".xbm", ".jp2", ".pcx", ".jbg", ".heif", ".map",
-                                      ".pdb", ".picon", ".pnm", ".jpe", ".jif", ".jps", ".pbm", ".g3", ".yuv", ".pict",
-                                      ".ras", ".pal", ".g4", ".pcd", ".sixel", ".rgf", ".sgi", ".six", ".mng", ".jbig",
-                                      ".xv", ".xwd", ".fts", ".vips", ".ipl", ".pct", ".hrz", ".pfm", ".pam", ".uyvy",
-                                      ".otb", ".mtv", ".viff", ".fax", ".pgx", ".sun", ".palm", ".rgbo", ".jfi"}
 
     def scanText(self, text_input: str) -> bool:
         """
@@ -233,7 +220,7 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
         self.triggering_word = ""
         self.triggering_blocked_word = ""
 
-        # Search for blocked words (raw text)
+        # Stage 1: Search for unformatted blocked words in the input
         for blocked_word in self.blocked_words:
             # Convert the message to a list of strings
             for word in tokenize(text_input):
@@ -243,8 +230,20 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
                     self.triggering_blocked_word = blocked_word
                     self.triggering_word = word
                     return True
+                # Also try formatting the blocked word a bit by removing spaces
+                elif fuzz.ratio(word, blocked_word.replace(' ', '')) >= 80 and not (word in self.whitelisted_words):
+                    # Update class vars as needed
+                    self.triggering_blocked_word = blocked_word
+                    self.triggering_word = word
+                    return True
+                # Finally, see if the blocked word is plainly in the token, and see if the token is whitelisted or not
+                elif ((blocked_word in word) or (blocked_word.replace(' ', '') in word)) and not (word in self.whitelisted_words):
+                    # Update class vars as needed
+                    self.triggering_blocked_word = blocked_word
+                    self.triggering_word = word
+                    return True
 
-        # Search for blocked words (Leetspeak)
+        # Stage 2: Search for Leetspeak variants of the blocked words in the input
 
         # This function tests the input string against every Leetspeak variant
         # of the blocked words dictionary
@@ -258,6 +257,19 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
                         self.triggering_blocked_word = blocked_word_key
                         self.triggering_word = string_input
                         return True  # Stop after a blocked word is found
+
+                    # Also try formatting the Leetspeak variant a bit by removing spaces
+                    elif fuzz.ratio(string_input, leet_variant.replace(' ', '')) >= 80:
+                        self.triggering_blocked_word = blocked_word_key
+                        self.triggering_word = string_input
+                        return True
+
+                    # Finally, see if the Leetspeak variant is plainly in the token
+                    elif (leet_variant in string_input) or (leet_variant.replace(' ', '') in string_input):
+                        self.triggering_blocked_word = blocked_word_key
+                        self.triggering_word = string_input
+                        return True
+
             return False
 
         # The following system splits the task of comparing tokens from the input message or file name to
@@ -277,8 +289,6 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
     # Listener: On Ready
     @commands.Cog.listener()
     async def on_ready(self) -> None:
-        logandprint.logCogLoad(self.__class__.__name__)
-
         # Start background task(s)
         self.checkForNeededUnbans.start()
         logandprint.info('Started background task "Check for Needed Unbans."')
@@ -289,23 +299,24 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
         # Download/load needed libraries for word_tokenize()
         punkt_path = os.path.join(os.path.expanduser('~'), 'nltk_data/tokenizers/punkt.zip')
         if not os.path.exists(punkt_path):
+            logandprint.info("Downloading libraries for string tokenization...")
             nltk.download("punkt")
+            logandprint.info("Done!")
 
         # Pre-cache the Leetspeak variants list
-        logandprint.debug("Pre-caching Leetspeak variants of blocked words. (This may take a moment.)")
+        logandprint.info("Pre-caching Leetspeak variants of blocked words. (This may take a moment.)")
         for word in self.blocked_words:
             self.leet_variant_dict.update(generateLeetspeakVariants(word))
+        logandprint.info(f"Done!")
 
-        logandprint.debug(f"Done! Size of list: {float((sys.getsizeof(self.leet_variant_dict)) / 1048576):.2f} Mb")
+        # Log cog being ready
+        logandprint.logCogLoad(self.__class__.__name__)
 
         return
 
     # Listener: On Message
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message) -> None:
-        # DEBUG: Check function performance time
-        start_time = time.perf_counter()
-
         # Check if maintenance mode is on
         if self.bot.maintenance_mode:
             return
@@ -394,18 +405,27 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
                     f"{message.author.mention}, your message contains a rule-breaking word or phrase. If this is in "
                     "error, please reach out to the server staff using `/question`.")
                 log_message: str = (f"User {loggingMention(message.author)} sent a message containing a blocked word or"
-                                    f" phrase in channel #{message.channel.name}. Triggering word in message: \"{self.triggering_word}.\" Triggering word in blocklist: \"{self.triggering_blocked_word}\"")
+                                    f" phrase in channel #{message.channel.name}."
+                                    f" Triggering word in message: \"{self.triggering_word}.\""
+                                    f" Triggering word in blocklist: \"{self.triggering_blocked_word}\"")
 
             logandprint.warning(log_message, source="d")
 
             return
 
-        # Remove only whitespace from the message, and convert to lowercase
-        message_content: str = re.sub(r"[^\w\s]", "", message.content.lower().replace("_", " ").replace("-", " ").replace(".", " "))
-        message_content_with_ints: str = re.sub(r"\W", "", message.content.lower().replace("_", " ").replace("-", " ").replace(".", " "))
+        # The following spaghetti code abomination takes the message content, makes it lowercase, replaces "_", "-" and
+        # "." with spaces, removes misc. characters(&, %, etc.), removes character repetitions greater than 3, and
+        # strips whitespace from the beginning and end of the message.
+        # An example is a message content of "@#@ test_4321 uhhhhhhh" would become "test 4321 uhhh"
+        message_content = re.compile(r'(.)\1{2,}').sub(r'\1' * 2, re.sub(r"[^\w\s]", "",
+                                                                         message.content.lower()
+                                                                         .replace("_", " ")
+                                                                         .replace("-", " ")
+                                                                         .replace(".", " ")
+                                                                         .strip()))
 
         # Scan the message
-        if self.scanText(message_content) or self.scanText(message_content_with_ints):
+        if self.scanText(message_content):
             return await handleBlockedPhrase()
 
         # And the attachment names as well
@@ -466,10 +486,6 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
         # Fourth scan: Spam prevention
         # if spam_prevention_cog_instance:
         #    await spam_prevention_cog_instance.checkForSpam(message)
-
-        end_time = time.perf_counter()  # Stop the timer
-        elapsed_time = end_time - start_time
-        logandprint.debug(f"Total time for message scan: {elapsed_time:.4f} seconds")
 
         return
 
@@ -839,10 +855,10 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
                                                     " blocked words list.)", ephemeral=True)
 
             # Update Leetspeak variants pre-cache
-            logandprint.debug("Updating pre-cache of Leetspeak variants of blocked words. (This may take a moment.)")
+            logandprint.info("Updating pre-cache of Leetspeak variants of blocked words. (This may take a moment.)")
             for word in self.blocked_words:
                 self.leet_variant_dict.update(generateLeetspeakVariants(word))
-            logandprint.debug("Done!")
+            logandprint.info("Done!")
 
             # Get the total amount of blocked word Leetspeak variants
             total_length: str = prettyPrintInt(int(sum(len(lst) for lst in self.leet_variant_dict.values())))
@@ -928,7 +944,6 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
         await interaction.response.send_message(f'Added ||{blocked_word}|| to blocklist.', ephemeral=True)
 
         # Log and print the word being added
-        log.debug(f"Added word \"{blocked_word}\" to blocked words list.", source='d')
         return logandprint.info(f"User {interaction.user} added word \"{blocked_word}\" to blocked "
                                 f"words list.", source='d')
 

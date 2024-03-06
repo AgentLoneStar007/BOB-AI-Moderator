@@ -45,15 +45,15 @@ class QuestionModal(discord.ui.Modal, title='Question for Staff'):
         channel: discord.channel.TextChannel = interaction.guild.get_channel(QUESTION_CHANNEL_ID)
         # Send the embed in the channel
         await channel.send(embed=embed)
-        await interaction.response.send_message(f'Your question was submitted, {self.user.mention}, and a response will '
-                                                'be issued shortly.', ephemeral=True)
-        return log.info(f'User {interaction.user.name} submitted a question to staff.')
+        await interaction.response.send_message(f"Your question was submitted, {self.user.mention}, and a response will "
+                                                "be issued shortly.", ephemeral=True)
+        return log.info(f"User {interaction.user.name} submitted a question to staff.")
 
     # This function will be run if there's an error
     async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
-        await interaction.response.send_message('The following error occurred when trying to submit your form: '
-                                                 f'{error}', ephemeral=True)
-        return log.error(f'An error occurred when user {interaction.user.name} tried to submit a question.', source='d')
+        await interaction.response.send_message("The following error occurred when trying to submit your form: "
+                                                f"{error}", ephemeral=True)
+        return log.error(f"An error occurred when user {interaction.user.name} tried to submit a question.", source='d')
 
 
 class MemberUtils(commands.Cog, description="Utilities for server members."):
@@ -67,10 +67,10 @@ class MemberUtils(commands.Cog, description="Utilities for server members."):
         return logandprint.logCogLoad(self.__class__.__name__)
 
     # Command: Question, Cooldown: 5 minutes
-    @app_commands.command(name='question', description='Leave a question for the server staff to answer.')
-    # By specifying i.guid_id and i.user.id, it's a member cooldown, meaning that a member in a server can use the
+    @app_commands.command(name="question", description="Leave a question for the server staff to answer.")
+    # By specifying i.guild_id and i.user.id, it's a member cooldown, meaning that a member in a server can use the
     # command, go on cooldown, but go to another server that the bot is in and use the command. In other words, the
-    # cooldown is guild-specific, and not bot-wide, if the bot is on multiple servers. This is unnecessary for this
+    # cooldown is server-specific, and not bot-wide, if the bot is on multiple servers. This is unnecessary for this
     # bot because he'll probably only ever be on one server, but it's good practice.
     @app_commands.checks.cooldown(1, 300.0, key=lambda i: (i.guild_id, i.user.id))
     async def question(self, interaction: discord.Interaction) -> None:
@@ -88,17 +88,18 @@ class MemberUtils(commands.Cog, description="Utilities for server members."):
         await interaction.response.send_modal(question_modal)
 
         # Log the event
-        return log.info(f'{interaction.user.name} started a questionnaire form for staff to answer.', source='d')
+        return log.info(f"{interaction.user.name} started a questionnaire form for staff to answer.", source='d')
 
     # Command: Reaction, Cooldown: 5 seconds
-    @app_commands.command(name='reaction', description='Choose a reaction image from a list. It\'s kind of like advanced emojis.')
+    @app_commands.command(name="reaction", description="Choose a reaction image from a list to send. Basically a"
+                                                       "combination of GIFs and emojis.")
     @app_commands.checks.cooldown(1, 5.0, key=lambda i: (i.guild_id, i.user.id))
     async def reaction(self, interaction: discord.Interaction) -> None:
         # Check if maintenance mode is on
         if self.bot.maintenance_mode:
             return
 
-        return await interaction.response.send_message('This feature is coming soon!', ephemeral=True)
+        return await interaction.response.send_message("This feature is coming soon!", ephemeral=True)
 
 
 async def setup(bot) -> None:
