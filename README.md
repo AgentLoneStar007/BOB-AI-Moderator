@@ -21,12 +21,12 @@ his code.
   - [ ] AI-Powered Auto-Mod Systems
     - [x] AI-Powered Image Scanning System
     - [ ] AI-Powered Contextually-Aware Auto-Mod System
-- [ ] Music Player
+- [x] Music Player
   - [x] Basic Music Player
   - [x] Queues
   - [x] YouTube Support
   - [x] YouTube Playlist Support
-  - [ ] Wavelink v3 Support
+  - [x] Wavelink v3 Support
   - [x] More Player Control/Info Commands
     - [x] Shuffle Command
     - [x] Queue List Command

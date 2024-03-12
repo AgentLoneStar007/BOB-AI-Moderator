@@ -161,6 +161,7 @@ cython_debug/
 
 # Custom
 logs/*
+lavalink/logs/*
 data/moderation/*
 data/update_files/*
 data/reaction_images/*

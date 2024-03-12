@@ -11,7 +11,6 @@ from utils.logger import Log, LogAndPrint
 # TODO: Create limit on queue size for player
 # TODO: Add auto-compression to prevent people from playing deafening tracks and blowing others' ears out (I think
 #  Wavelink has audio leveling systems I can use)
-# TODO: Add a command to go to specific song in queue called /skipto
 # TODO: Find a way to prevent people from playing videos with blocked words in the title(maybe)
 # TODO: Add a command to loop the current queue called /loopqueue
 
@@ -22,6 +21,13 @@ logandprint = LogAndPrint()
 
 # The following three functions were written by ChatGPT. I know; shut up.
 def convertDuration(milliseconds) -> str:
+    """
+    Converts an
+
+    :param milliseconds:
+    :return:
+    """
+
     # Convert milliseconds to seconds
     seconds: int = milliseconds / 1000
 
@@ -40,40 +46,89 @@ def convertDuration(milliseconds) -> str:
     return formatted_time
 
 
-def checkIfTimeFormatValid(input_str: str) -> bool:
-    # Regular expression patterns for HH:MM:SS and MM:SS formats
-    hh_mm_ss_pattern = r'^(0?[0-9]|1[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$'
-    mm_ss_pattern = r'^(0?[0-9]|1[0-9]|2[0-3]):[0-5][0-9]$'
+def padTimeFormat(input_str: str) -> str | bool:
+    """
+    A function that converts an input string of time that's roughly in the format of
+    "HH:MM:SS" or "MM:SS". No field requires a padding of zeroes; an input of "3:39"
+    will work just as well as "00:03:39". The function will return a full time string
+    in the format "HH:MM:SS", padding each field with a zero, if needed.
 
-    # Check if the input matches either pattern
-    if re.match(hh_mm_ss_pattern, input_str) or re.match(mm_ss_pattern, input_str):
-        return True
+    :param input_str: A string in the rough format of "HH:MM:SS" or "MM:SS".
+    :returns: A *str* in the format "HH:MM:SS", or a *bool* of False if the
+    input cannot be formatted.
+    :raises None:
+    """
+
+    # Regular expression patterns for various time formats
+    time_formats: list = [
+        r'^([0-1]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$',  # HH:MM:SS
+        r'^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$',  # H:MM:SS (optional leading zero for hours)
+        r'^[0-5][0-9]:[0-5][0-9]$'  # MM:SS
+    ]
+
+    # Check if the input matches any of the patterns
+    for pattern in time_formats:
+        # If a match is found,
+        if re.match(pattern, input_str):
+            # Split the input by the colons
+            parts: list = input_str.split(":")
+
+            # If the input is in the form "MM:SS", add "00" to the hours' place
+            if len(parts) == 2:
+                parts.insert(0, "00")  # Add hours as 00
+
+            # And finally, return the full "HH:MM:SS" string, padding each space with a zero as needed
+            return ":".join(part.zfill(2) for part in parts)
+
+    return False  # Return False if the input is invalid
+
+
+def millisecondsToTime(milliseconds: int) -> str:
+    """
+    A function that converts an input of milliseconds to a string of either "HH:MM:SS" or "MM:SS", as needed.
+
+    :param milliseconds: The input of milliseconds to convert.
+    :returns: a *str* in the format of either "HH:MM:SS" or "MM:SS", negating hours if not needed.
+    :raises None:
+    """
+
+    seconds = int(milliseconds / 1000)
+    minutes = int(seconds / 60) % 60
+    remaining_seconds = seconds % 60
+
+    # Check if hours are needed (more than 60 minutes)
+    if minutes >= 60:
+        hours = int(minutes / 60)
+        minutes = minutes % 60
+        # Return the string with the hours field
+        return f"{hours:02d}:{minutes:02d}:{remaining_seconds:02d}"
     else:
-        return False
+        # Return the string without the hours field
+        return f"{minutes:02d}:{remaining_seconds:02d}"
 
 
 def timeToMilliseconds(time_str: str) -> int:
-    # Regular expression pattern for HH:MM:SS and MM:SS formats
-    hh_mm_ss_pattern: str = r"^(0?[0-9]|1[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$"
-    mm_ss_pattern: str = r"^(0?[0-9]|1[0-9]|2[0-3]):[0-5][0-9]$"
+    """
+    A function that converts a time string, in the format of "HH:MM:SS" to milliseconds.
 
-    # Check if the input matches either pattern
-    hh_mm_ss_match = re.match(hh_mm_ss_pattern, time_str)
-    mm_ss_match = re.match(mm_ss_pattern, time_str)
+    :param time_str: The time string to convert.
+    :returns: int - The milliseconds in an integer format.
+    :raises None:
+    """
 
-    if hh_mm_ss_match:
-        hours, minutes, seconds = map(int, hh_mm_ss_match.groups())
-        total_seconds = hours * 3600 + minutes * 60 + seconds
-    elif mm_ss_match:
-        minutes, seconds = map(int, mm_ss_match.groups())
-        total_seconds = minutes * 60 + seconds
-    else:
-        raise ValueError(f"Invalid time format in timeToMilliseconds function in {__name__}. Use HH:MM:SS or MM:SS."
-                         f" Hours and minutes don't need to be padded with a zero.")
-    print("amogus")
+    # Split the input into hours, minutes, and seconds, and put the values in a list
+    parts: list = time_str.split(':')
+
+    # Assign each part in the list to hours, minutes, and seconds
+    hours, minutes, seconds = map(int, parts)
+
+    # Get the total amount of seconds in the input
+    total_seconds = hours * 3600 + minutes * 60 + seconds
 
     # Convert total seconds to milliseconds
     milliseconds: int = total_seconds * 1000
+
+    # And finally, return it
     return milliseconds
 
 
@@ -109,15 +164,14 @@ async def runChecks(
     return True
 
 
-# Not defining a return value for this function because I think it would break
-async def checkPlayer(interaction: discord.Interaction, custom_message: str = None):
+async def checkPlayer(interaction: discord.Interaction, custom_message: str = None) -> wavelink.Player | None:
     try:
         player: wavelink.Player = interaction.guild.voice_client
         return player
-    except Exception as e:
+    except Exception as error:
         # TODO: Remove the following (it's here for testing purposes)
         logandprint.debug(f'This is the error output for the try/except in the checkPlayer function in the music.py '
-                          f'cog. The error output is: {e}')
+                          f'cog. The error output is: {error}')
         if not custom_message:
             custom_message: str = 'No music player is currently running.'
         await interaction.response.send_message(custom_message, ephemeral=True)
@@ -128,9 +182,9 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
     def __init__(self, bot) -> None:
         self.bot = bot
 
-    # Vars
-    loop_track: bool = False
-    current_track: wavelink.YouTubeTrack = None
+        # Vars
+        self.loop_track: bool = False
+        self.current_track: wavelink.Playable | None = None
 
     # Listener: On Ready
     @commands.Cog.listener()
@@ -150,30 +204,33 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             return
 
         # Vars
-        should_leave = False
+        should_leave: bool = False
+
+        # NOTE: If any other feature involving voice chats is added that is NOT Wavelink, the following code will break!
 
         # Loop through every guild to get connected voice clients
         for guild in self.bot.guilds:
-            voice_client = guild.voice_client
+            player: wavelink.Player | None = guild.voice_client
             # If voice client is connected
-            if voice_client and voice_client.is_connected():
+            if player:
                 # If the bot is the only one present, disconnect
-                if len(voice_client.channel.members) == 1:
+                if len(player.channel.members) == 1:
                     should_leave = True
-                try:
-                    # Check if player is running, and if it is, disconnect if not in use and clear the queue
-                    player: wavelink.Player = voice_client
-                    if not player.is_playing() and not player.is_paused():
-                        player.queue.reset()
-                        should_leave = True
-                except:
-                    # Disconnect if player isn't running
+
+                # Check if player.current exists. If it doesn't, there's no current track playing.
+                if not player.current:
                     should_leave = True
+
                 if should_leave:
                     # Log message and print to console
-                    logandprint.info(f'Leaving {voice_client.channel} due to inactivity.')
+                    logandprint.info(f"Leaving {player.channel} due to inactivity.")
+
+                    # Clear the queue
+                    player.queue.reset()
+
                     # Disconnect from VC
-                    await voice_client.disconnect()
+                    await player.disconnect()
+
                     return
 
         return
@@ -182,12 +239,11 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
     @checkIfConnectedToVoiceChannel.before_loop
     async def before_check_if_connected_to_voice_channel(self) -> None:
         # Wait till bot is ready before starting task
-        await self.bot.wait_until_ready()
-        return
+        return await self.bot.wait_until_ready()
 
     # Listener: On Track End
     @commands.Cog.listener()
-    async def on_wavelink_track_end(self, payload: wavelink.TrackEventPayload) -> None:
+    async def on_wavelink_track_end(self, payload: wavelink.TrackEndEventPayload) -> None:
         # Check if maintenance mode is on
         if self.bot.maintenance_mode:
             return
@@ -220,7 +276,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
         # Check if user is in VC
         if not user_vc:
-            return await interaction.response.send_message('You are not connected to a voice channel.', ephemeral=True)
+            return await interaction.response.send_message("You are not connected to a voice channel.", ephemeral=True)
 
         # Check if player is already running. If not, create a new player
         if not interaction.client.voice_clients:
@@ -228,24 +284,26 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         else:
             # If player is running, check if bot is in a different VC than user with music playing
             player: wavelink.Player = interaction.guild.voice_client
-            if player.is_playing() and user_vc.channel != interaction.guild.voice_client.channel:
-                return await interaction.response.send_message('I am already playing music in another channel.', ephemeral=True)
+            if player.playing and user_vc.channel != interaction.guild.voice_client.channel:
+                return await interaction.response.send_message("I am already playing music in another channel.", ephemeral=True)
 
             # Check if player is not playing music, and user is in different VC
-            if not player.is_playing() and not player.is_paused() and user_vc.channel != interaction.guild.voice_client.channel:
+            if not player.playing and not player.paused and user_vc.channel != interaction.guild.voice_client.channel:
                 await player.move_to(user_vc.channel)
 
-        # TODO: Do more debugging on playlists support
+        await interaction.response.send_message(f"Loading your query of `{query}`, please wait...", ephemeral=True)
+
         # If query is playlist URL
-        if 'https://' and 'list=' in query:
+        if "https://" and "list=" in query:
             # Error handler in case BOB can't find any playlists matching URL
             try:
-                playlist: wavelink.YouTubePlaylist = await wavelink.YouTubePlaylist.search(query)
+                playlist: wavelink.Playlist = await wavelink.Playable.search(query, source=wavelink.TrackSource.YouTube)
             except ValueError:
-                return await interaction.response.send_message('I couldn\'nt find any playlists matching that URL.', ephemeral=True)
+                await interaction.edit_original_response(content="I couldn't find any playlists matching that URL.")
+                return
 
-            # Create list of tracks in playlist
-            playlist_tracks: list[wavelink.YouTubeTrack] = playlist.tracks
+                # Create list of tracks in playlist
+            playlist_tracks: list[wavelink.Playable] = playlist.tracks
             notify_about_playlist_too_long: bool = False
 
             # If playlist is too long, update notify var
@@ -253,7 +311,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
                 notify_about_playlist_too_long = True
 
             # Create selected track int
-            selected_track: int = playlist.selected_track
+            selected_track: int = playlist.selected
             # If selected track is -1(no selected track), selected track is the first item in the playlist
             selected_track = 0 if selected_track == -1 else selected_track
             # If the selected item to the end of the playlist is less than or equal to 100, selection_end equals the
@@ -266,7 +324,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
             # Create the embed
             embed = discord.Embed(
-                title=f'Playlist: {playlist.name}',
+                title=f"Playlist: {playlist.name}",
                 color=discord.Color.from_rgb(1, 162, 186)
             )
 
@@ -274,46 +332,50 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             limit: int = 6 if len(playlist_tracks) > 5 else len(playlist_tracks)
             i: int = 1
             while i < limit:
-                embed.add_field(name=f'Track {i}:', value=f'[{playlist_tracks[i].title}]({playlist_tracks[i].uri})',
+                embed.add_field(name=f"Track {i}:", value=f"[{playlist_tracks[i].title}]({playlist_tracks[i].uri})",
                                 inline=False)
                 i: int = i + 1
 
             # If playlist is greater than five tracks, add a notifying footer to the embed
             if len(playlist_tracks) > 5:
-                embed.set_footer(text=f'And {len(playlist_tracks) - 6} more tracks...')
+                embed.set_footer(text=f"And {len(playlist_tracks) - 6} more tracks...")
 
             # If there's already a song playing:
-            if player.is_playing() or player.is_paused():
+            if player.current:
                 # Add all items to queue
                 for track in playlist_tracks:
-                    player.queue.put(item=track)
+                    player.queue.put(track)
 
                 # Set embed description var
-                embed_description: str = f'Added {len(playlist_tracks)} songs to queue in channel {player.channel}.'
+                embed_description: str = f"Added {len(playlist_tracks)} songs to queue in channel {player.channel}."
 
                 # If playlist is too long, change description of embed to notify user
                 if notify_about_playlist_too_long:
-                    embed_description = embed_description + ' (Playlist size limit is 100 tracks.)'
+                    embed_description = embed_description + " (Playlist size limit is 100 tracks.)"
 
                 # Set the description for the embed
                 embed.description = embed_description
 
                 # Send the embed
-                await interaction.response.send_message(embed=embed, ephemeral=True)
+                await interaction.edit_original_response(embed=embed, content="")
 
             else:
                 # Play the first track in the list
                 await player.play(playlist_tracks[0])
+
+                # Unpause the player, if paused
+                await player.pause(False)
 
                 # Update the current_track var with the now playing track
                 self.current_track = playlist_tracks[0]
 
                 # Add all items to queue, excluding the first song(which is the one that will start playing immediately)
                 for track in playlist_tracks[1:]:
-                    player.queue.put(item=track)
+                    player.queue.put(track)
 
                 # Set embed description var
-                embed_description: str = f'Now playing [{playlist_tracks[0].title}]({playlist_tracks[0].uri}), and added {len(playlist_tracks) - 1} songs to queue in channel {player.channel}.'
+                embed_description: str = (f"Now playing [{playlist_tracks[0].title}]({playlist_tracks[0].uri}), and "
+                                          f"added {len(playlist_tracks) - 1} songs to queue in channel {player.channel}.")
 
                 # If playlist is too long, change description of embed to notify user
                 if notify_about_playlist_too_long:
@@ -323,44 +385,54 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
                 embed.description = embed_description
 
                 # Send the embed
-                await interaction.response.send_message(embed=embed, ephemeral=True)
+                await interaction.edit_original_response(embed=embed, content="")
 
         # Otherwise query is track or search query
         else:
-            tracks: list[wavelink.YouTubeTrack] = await wavelink.YouTubeTrack.search(query)
+            tracks: wavelink.Search = await wavelink.Playable.search(query, source=wavelink.TrackSource.YouTube)
             if not tracks:
-                return await interaction.response.send_message(f'I could\'nt find any songs with your query of "`{query}`."', ephemeral=True)
+                await interaction.edit_original_response(content="I couldn't find any songs with your query"
+                                                                 f" of \"`{query}`.\"")
+                return
 
             # The track to play will be the first result
-            track: wavelink.YouTubeTrack = tracks[0]
+            track: wavelink.Playable = tracks[0]
+
+            # Get the thumbnail of the track
+            video_id = track.uri.replace("https://www.youtube.com/watch?v=", '')
+            thumbnail_url = f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg"
+
             # Add track to queue if a track is already playing
-            if player.is_playing() or player.is_paused():
+            if player.current:
                 # There's probably a more efficient way to go about the embeds, but I'll do it later
-                player.queue.put(item=track)
+                player.queue.put(track)
 
                 # Get time left before track plays
-                time_left = player.current.duration - player.position
+                time_left = player.current.length - player.position
                 for x in player.queue:
-                    time_left = time_left + x.duration
-                time_left = time_left - track.duration
+                    time_left = time_left + x.length
+                time_left = time_left - track.length
 
                 # Create the embed
                 embed = discord.Embed(
                     title=track.title,
                     url=track.uri,
-                    description=f'Song added to queue for channel {player.channel}.',
+                    description=f"Song added to queue for channel {player.channel}.",
                     color=discord.Color.from_rgb(1, 162, 186)
                 )
-                embed.add_field(name='Length:', value=convertDuration(track.duration))
-                embed.add_field(name='Author:', value=track.author)
-                embed.add_field(name='Time Before Track Plays:', value=convertDuration(time_left))
-                embed.set_image(url=track.thumb)
-                await interaction.response.send_message(embed=embed, ephemeral=True)
+                embed.add_field(name="Length:", value=convertDuration(track.length))
+                embed.add_field(name="Author:", value=track.author)
+                embed.add_field(name="Time Before Track Plays:", value=convertDuration(time_left))
+                embed.set_image(url=thumbnail_url)
+                await interaction.edit_original_response(embed=embed, content="")
 
             # Play track immediately if nothing else is playing
             else:
                 # Play the track
                 await player.play(track)
+
+                # Unpause player, if paused
+                await player.pause(False)
 
                 # Update the current_track var
                 self.current_track = track
@@ -369,19 +441,20 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
                 embed = discord.Embed(
                     title=track.title,
                     url=track.uri,
-                    description=f'Now playing in {player.channel}.',
+                    description=f"Now playing in {player.channel}.",
                     color=discord.Color.from_rgb(1, 162, 186)
                 )
-                embed.add_field(name='Length:', value=convertDuration(track.duration))
-                embed.add_field(name='Author:', value=track.author)
-                embed.set_image(url=track.thumb)
-                await interaction.response.send_message(embed=embed, ephemeral=True)
+                embed.add_field(name="Length:", value=convertDuration(track.length))
+                embed.add_field(name="Author:", value=track.author)
+                embed.set_image(url=thumbnail_url)
+                await interaction.edit_original_response(embed=embed, content="")
 
         # Log the usage of the command
         return log.logCommand(interaction)
 
     # Command: Skip
-    @app_commands.command(name='skip', description='Skips to the next song in queue. Stops the player if there are no songs left.')
+    @app_commands.command(name="skip", description="Skips to the next song in queue. Stops the player if there are no"
+                                                   "songs left.")
     async def skip(self, interaction: discord.Interaction) -> None:
         # Check if maintenance mode is on
         if self.bot.maintenance_mode:
@@ -409,19 +482,20 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             self.current_track = None
 
             # Respond to command
-            await interaction.response.send_message('Playback was stopped because there are no remaining songs in the queue.', ephemeral=True)
+            await interaction.response.send_message("Playback was stopped because there are no remaining songs in the"
+                                                    "queue.", ephemeral=True)
 
             # Log the command
             return log.logCommand(interaction)
 
         # Skip current song in queue
-        await player.seek(player.current.duration * 1000)
-        if player.is_paused():
-            await player.resume()
-        await interaction.response.send_message(f'Skipped track **"{player.current.title}."**', ephemeral=True)
+        await player.seek(player.current.length)
+        # Resume playback if paused
+        await player.pause(False)
+        await interaction.response.send_message(f"Skipped track **\"{player.current.title}.\"**", ephemeral=True)
 
     # Command: Stop
-    @app_commands.command(name='stop', description='Stops the music player and clears the queue.')
+    @app_commands.command(name="stop", description="Stops the music player and clears the queue.")
     async def stop(self, interaction: discord.Interaction) -> None:
         # Check if maintenance mode is on
         if self.bot.maintenance_mode:
@@ -440,51 +514,24 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         if self.loop_track:
             self.loop_track = False
 
-        # Stop playback
-        await player.stop()
-
-        # Unpause the player if it is paused
-        if player.is_paused():
-            await player.resume()
+        # Resume playback if paused
+        await player.pause(False)
 
         # Empty queue
         player.queue.reset()
 
+        # Stop playback
+        await player.stop()
+
         # Remove current playing track var (for loop command)
         self.current_track = None
 
-        await interaction.response.send_message('Stopped music playback.', ephemeral=True)
-        return log.logCommand(interaction)
-
-    # Command: Pause
-    @app_commands.command(name='pause', description='Pauses the player.')
-    async def pause(self, interaction: discord.Interaction) -> None:
-        # Check if maintenance mode is on
-        if self.bot.maintenance_mode:
-            return
-
-        # Run checks
-        if not await runChecks(interaction):
-            return
-
-        # Check if player is running
-        player: wavelink.Player = await checkPlayer(interaction)
-        if not player:
-            return
-
-        # Check if paused
-        if player.is_paused():
-            # Don't log the command because it makes no difference
-            return await interaction.response.send_message('The player is already paused.', ephemeral=True)
-
-        # Pause the player
-        await player.pause()
-        await interaction.response.send_message('Playback paused.', ephemeral=True)
+        await interaction.response.send_message("Stopped music playback.", ephemeral=True)
         return log.logCommand(interaction)
 
     # Command: Resume
-    @app_commands.command(name='resume', description='Resumes the player, if paused.')
-    async def resume(self, interaction: discord.Interaction) -> None:
+    @app_commands.command(name="togglepause", description="Toggles whether the player is paused or not.")
+    async def togglePause(self, interaction: discord.Interaction) -> None:
         # Check if maintenance mode is on
         if self.bot.maintenance_mode:
             return
@@ -498,25 +545,37 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         if not player:
             return
 
-        # Check if paused
-        if not player.is_paused():
-            await interaction.response.send_message('The player is currently not paused.', ephemeral=True)
-            return
-        # Resume the player
-        await player.resume()
-        await interaction.response.send_message('Playback resumed.', ephemeral=True)
+        # Check if the player has an active track
+        if not player.current and not player.queue:
+            return interaction.response.send_message("There's currently no track playing.", ephemeral=True)
+
+        # Create response message based off of the current pause status
+        if player.paused:
+            message: str = "Resumed playback."
+        else:
+            message: str = "Paused the player."
+
+        # Toggle whether the player's paused
+        await player.pause(not player.paused)
+
+        # Send notify message
+        await interaction.response.send_message(message, ephemeral=True)
+
+        # Log usage of command
         return log.logCommand(interaction)
 
     # Command: Volume
-    @app_commands.command(name='volume', description='Adjusts the volume of the music player. Syntax: "/volume <volume>"')
-    @app_commands.describe(volume='The volume to set the player to.')
+    @app_commands.command(name="volume", description="Adjusts the volume of the music player."
+                                                     " Syntax: \"/volume <volume>\"")
+    @app_commands.describe(volume="The volume to set the player to.")
     async def volume(self, interaction: discord.Interaction, volume: int) -> None:
         # Check if maintenance mode is on
         if self.bot.maintenance_mode:
             return
 
         # Run checks
-        if not await runChecks(interaction, user_in_different_vc_msg='You can only adjust the volume of the music if you\'re in the same voice channel as me.'):
+        if not await runChecks(interaction, user_in_different_vc_msg="You can only adjust the volume of the music if"
+                                                                     " you're in the same voice channel as me."):
             return
 
         # Check if volume is in acceptable parameters (or if it's me, so I can set the volume to whatever I want)
@@ -528,16 +587,17 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
             # Set volume
             await player.set_volume(volume)
-            await interaction.response.send_message(f'Volume of player adjusted to `{volume}`.', ephemeral=True)
+            await interaction.response.send_message(f"Volume of player adjusted to `{volume}`.", ephemeral=True)
             return log.logCommand(interaction)
         else:
             # Send error message
-            await interaction.response.send_message('Volume must be between one and 100.', ephemeral=True)
+            await interaction.response.send_message("Volume must be between one and 100.", ephemeral=True)
             return
 
     # Command: Rewind
-    @app_commands.command(name='rewind', description='Rewinds the player by a number of seconds. Syntax: "/rewind [seconds to rewind]"')
-    @app_commands.describe(rewind_time='The time, in seconds, to rewind.')
+    @app_commands.command(name="rewind", description="Rewinds the player by a number of seconds. Syntax: \"/rewind "
+                                                     "[seconds to rewind]\"")
+    @app_commands.describe(rewind_time="The time, in seconds, to rewind. Default is 10 seconds.")
     async def rewind(self, interaction: discord.Interaction, rewind_time: int = 10) -> None:
         # Check if maintenance mode is on
         if self.bot.maintenance_mode:
@@ -552,21 +612,34 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         if not player:
             return
 
+        # Prevent negative inputs
+        if rewind_time < 0:
+            return interaction.response.send_message("Rewind time must be a positive integer.", ephemeral=True)
+
+        # Convert the rewind time from seconds to milliseconds
         rewind_time = rewind_time * 1000
-        # If the rewind time is greater than time left before current position...
-        if rewind_time > int(player.position) or rewind_time < 0:
+
+        # If the rewind time is greater than time left before current position,
+        if rewind_time > int(player.current.length):
             # Restart song playback
             await player.seek(0)
-            await interaction.response.send_message('Restarted playback.', ephemeral=True)
+            await interaction.response.send_message("Restarted playback.", ephemeral=True)
             return log.logCommand(interaction)
+
+        # Rewind the player
         position_to_rewind_to = int(player.position - rewind_time)
         await player.seek(position_to_rewind_to)
-        await interaction.response.send_message(f'Rewound player to position `{convertDuration(position_to_rewind_to)}`.', ephemeral=True)
+
+        # Notify the user
+        await interaction.response.send_message(f"Rewound player to position `{convertDuration(position_to_rewind_to)}`.", ephemeral=True)
+
+        # Log the usage
         return log.logCommand(interaction)
 
     # Command: FastForward
-    @app_commands.command(name='fastforward', description='Fast-forwards the player by a number of seconds. Syntax: "/fastforward [seconds to fastforward]"')
-    @app_commands.describe(fastforward_time='The time, in seconds, to fast-forward.')
+    @app_commands.command(name="fastforward", description="Fast-forwards the player by a number of seconds. Syntax: "
+                                                          "\"/fastforward [seconds to fastforward]\"")
+    @app_commands.describe(fastforward_time="The time, in seconds, to fast-forward. Default is 10 seconds.")
     async def fastForward(self, interaction: discord.Interaction, fastforward_time: int = 10) -> None:
         # Check if maintenance mode is on
         if self.bot.maintenance_mode:
@@ -581,29 +654,41 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         if not player:
             return
 
-        ff_time = fastforward_time * 1000
+        # Prevent negative inputs
+        if fastforward_time < 0:
+            return interaction.response.send_message("Fast-forward time must be a positive integer.", ephemeral=True)
+
+        # Convert the fast-forward time from seconds to milliseconds
+        ff_time: int = fastforward_time * 1000
+
         # If the fastforward time is greater than time left in video...
-        if ff_time > int(player.position) or ff_time < 0:
+        if ff_time > int(player.current.length):
             # Skip to the next song in queue. Stop playback if queue is empty
             if player.queue.is_empty:
-                await interaction.response.send_message('Stopping playback because there\'s no more songs in the queue.', ephemeral=True)
+                await interaction.response.send_message("Stopping playback because there's no more songs in the queue.",
+                                                        ephemeral=True)
                 await player.stop()
                 return log.logCommand(interaction)
 
-            await player.play(player.queue.get())
-            await interaction.response.send_message('Skipping to next song in queue.', ephemeral=True)
+            await player.seek(player.current.length * 1000)
+            await interaction.response.send_message("Skipping to the next track in queue.", ephemeral=True)
             return log.logCommand(interaction)
 
-        position_to_ff_to = int(player.position + ff_time)
+        # Fast-forward the player
+        position_to_ff_to: int = int(player.position + ff_time)
         await player.seek(position_to_ff_to)
-        await interaction.response.send_message(f'Fast-forwarded player to position `{convertDuration(position_to_ff_to)}`.', ephemeral=True)
+
+        # Notify the user
+        await interaction.response.send_message(f"Fast-forwarded player to position `{convertDuration(position_to_ff_to)}`.",
+                                                ephemeral=True)
+
+        # Log the usage
         return log.logCommand(interaction)
 
-    # TODO: Fix bug in seek where it's stupidly needy on the formatting of the position. (Using /seek 0:00 doesn't work;
-    #  you have to use /seek 00:00, which is stupid.)
     # Command: Seek
-    @app_commands.command(name='seek', description='Seek to a position in the currently playing track. Syntax: "/seek <position, in format (HH:)MM:SS>"')
-    @app_commands.describe(position='The time to seek to in the track.')
+    @app_commands.command(name="seek", description="Seek to a position in the currently playing track. "
+                                                   "Syntax: \"/seek <position, in format (HH:)MM:SS>\"")
+    @app_commands.describe(position="The time to seek to in the track.")
     async def seek(self, interaction: discord.Interaction, position: str) -> None:
         # Check if maintenance mode is on
         if self.bot.maintenance_mode:
@@ -618,41 +703,43 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         if not player:
             return
 
-        # If the input is in the correct format
-        if checkIfTimeFormatValid(position):
-            # Define vars
-            time_to_seek: int = timeToMilliseconds(position)
-            print(time_to_seek)
+        # If the input is in the correct format,
+        if padTimeFormat(position):
+            # Define the time to seek to, which is the input converted to milliseconds
+            time_to_seek: int = timeToMilliseconds(padTimeFormat(position))
+            # Get the current position of the player, which is in milliseconds
             current_player_time: float = player.position
-            print(current_player_time)
+            # And get the length of the current track in the player
             current_player_length: int = player.current.length
-            print(current_player_length)
 
             # If the position is not less than zero or greater than the video length
             if not 0 < time_to_seek < current_player_length:
-                await interaction.response.send_message("The seek-to position must not be longer than the video, or"
-                                                        " less than zero.", ephemeral=True)
-                return
+                return await interaction.response.send_message("The seek-to position must not be longer than the video,"
+                                                               " or less than zero.", ephemeral=True)
 
-            # Seek to the position, and send a corresponding message
+            # Seek to the position in the current track
             await player.seek(time_to_seek)
-            print("amogus")
+
+            # Add some pretty formatting to the notify message
             if time_to_seek > current_player_time:
-                await interaction.response.send_message(f"Fast-forwarded to `{position}` in video.", ephemeral=True)
+                await interaction.response.send_message(f"Fast-forwarded to position `{millisecondsToTime(time_to_seek)}`"
+                                                        " in the current track.", ephemeral=True)
             else:
-                await interaction.response.send_message(f"Re-winded video to `{position}`.", ephemeral=True)
+                await interaction.response.send_message("Re-winded the current track to position"
+                                                        f" `{millisecondsToTime(time_to_seek)}`.", ephemeral=True)
 
             # Log command usage
             return log.logCommand(interaction)
 
         else:
+            # Notify that the input is an invalid format
             await interaction.response.send_message("Invalid position to seek to. Check command help page with "
                                                     "`/help seek` for more information.", ephemeral=True)
             return
 
     # Command: Loop
-    @app_commands.command(name='loop', description='Toggle looping the current track.')
-    async def loop(self, interaction: discord.Interaction):
+    @app_commands.command(name="toggleloop", description="Toggle looping the current track.")
+    async def toggleLoop(self, interaction: discord.Interaction):
         # Check if maintenance mode is on
         if self.bot.maintenance_mode:
             return
@@ -668,21 +755,21 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
         # Check if player is playing a track
         if not player.current:
-            return await interaction.response.send_message('No track is currently playing.', ephemeral=True)
+            return await interaction.response.send_message("No track is currently playing.", ephemeral=True)
 
         # Toggle track loop
         if not self.loop_track:
             self.loop_track = True
-            await interaction.response.send_message('Enabled looping of current track.', ephemeral=True)
+            await interaction.response.send_message("Enabled looping of current track.", ephemeral=True)
         else:
             self.loop_track = False
-            await interaction.response.send_message('Disabled looping of current track.', ephemeral=True)
+            await interaction.response.send_message("Disabled looping of current track.", ephemeral=True)
 
         # Log the command usage
         return log.logCommand(interaction)
 
     # Command: Shuffle
-    @app_commands.command(name='shuffle', description='Shuffle the tracks in the queue.')
+    @app_commands.command(name="shuffle", description="Shuffle the tracks in the queue.")
     async def shuffle(self, interaction: discord.Interaction):
         # Check if maintenance mode is on
         if self.bot.maintenance_mode:
@@ -700,18 +787,21 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         # If there is more than 1 item in the queue, shuffle it
         if player.queue and len(player.queue) > 1:
             player.queue.shuffle()
-            await interaction.response.send_message('Shuffled queue.', ephemeral=True)
+            await interaction.response.send_message("Shuffled queue.", ephemeral=True)
 
         # Otherwise, inform the user the queue can't be shuffled
         else:
-            return await interaction.response.send_message('There are not enough items in the queue to shuffle.', ephemeral=True)
+            return await interaction.response.send_message("There are not enough items in the queue to shuffle.",
+                                                           ephemeral=True)
 
         # Log the command usage
         return log.logCommand(interaction)
 
     # Command: QueueRemove
-    @app_commands.command(name='queueremove', description='Remove one or more items from the queue. Syntax: "/queueremove <index>" or "<index_start:index_end>"', )
-    @app_commands.describe(index='The index of the item to remove from queue, in the format "index," or "index start:index end."')
+    @app_commands.command(name="queueremove", description="Remove one or more items from the queue. Syntax: "
+                                                          "\"/queueremove <index>\" or \"<index_start:index_end>\"", )
+    @app_commands.describe(index="The index of the item to remove from queue, in the format \"index,\" "
+                                 "or \"index start:index end.\"")
     async def queueRemove(self, interaction: discord.Interaction, index: str):
         # Check if maintenance mode is on
         if self.bot.maintenance_mode:
@@ -728,22 +818,25 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
         # Check if there's anything in the queue
         if not player.queue:
-            return await interaction.response.send_message('There are no items in the queue to remove.', ephemeral=True)
+            return await interaction.response.send_message("There are no items in the queue to remove.", ephemeral=True)
 
         # Check if the index is in the correct format
         if not index.isnumeric() and ':' not in index:
-            return await interaction.response.send_message('Invalid format. Accepted formats are `/queueremove <index '
-                                                           'of item to remove>` or `/queueremove <index start:index end>`.', ephemeral=True)
+            return await interaction.response.send_message("Invalid format. Accepted formats are `/queueremove <index "
+                                                           "of item to remove>` or `/queueremove <index start:index end>`.",
+                                                           ephemeral=True)
 
         # If the index is a singular item to remove,
         if index.isnumeric():
             # If the index is negative or zero, it's invalid
             if int(index) < 1:
-                return await interaction.response.send_message('Index must be greater than zero.', ephemeral=True)
+                return await interaction.response.send_message("Index must be greater than zero.", ephemeral=True)
 
             # If the index given is greater than the queue's length, it's invalid
             if int(index) > len(player.queue):
-                return await interaction.response.send_message(f'There is no item in the queue with the index of {index}. The queue\'s length is {len(player.queue)}', ephemeral=True)
+                return await interaction.response.send_message(f"There is no item in the queue with the index of "
+                                                               f"{index}. The queue's length is {len(player.queue)}",
+                                                               ephemeral=True)
 
             # Get the item that will be removed and store it in a variable
             track: wavelink.Playable = player.queue.__getitem__(int(index) - 1)
@@ -753,10 +846,11 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
             # Stylize the response message depending on whether there's items remaining in the queue or not
             if not player.queue:
-                await interaction.response.send_message(f'Removed item [{track.title}]({track.uri}) from queue. The queue is now empty.',
+                await interaction.response.send_message(f"Removed item [{track.title}]({track.uri}) from queue. The queue is now empty.",
                                                         ephemeral=True)
             else:
-                await interaction.response.send_message(f'Removed item [{track.title}]({track.uri}) from queue.', ephemeral=True)
+                await interaction.response.send_message(f"Removed item [{track.title}]({track.uri}) from queue.",
+                                                        ephemeral=True)
 
         # Otherwise, it's start index:end index format
         else:
@@ -765,33 +859,35 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
             # If there's more than two items in the indexes list, it's an invalid format
             if len(indexes) != 2:
-                return await interaction.response.send_message('Invalid format. Accepted formats are `/queueremove <index '
-                                                           'of item to remove>` or `/queueremove <index start:index end>`.', ephemeral=True)
+                return await interaction.response.send_message("Invalid format. Accepted formats are `/queueremove "
+                                                               "<index of item to remove>` or `/queueremove <index "
+                                                               "start:index end>`.", ephemeral=True)
 
             # If either of the items are not numeric, it's an invalid format
             for x in indexes:
                 if not x.isnumeric():
                     return await interaction.response.send_message(
-                        'Invalid format. Accepted formats are `/queueremove <index '
-                        'of item to remove>` or `/queueremove <index start:index end>`.', ephemeral=True)
+                        "Invalid format. Accepted formats are `/queueremove <index "
+                        "of item to remove>` or `/queueremove <index start:index end>`.", ephemeral=True)
 
             # To make life easier, convert the indexes to integers
             indexes: list[int] = [int(x) for x in indexes]
 
             # If the first index is less than one, it's an invalid format
             if indexes[0] < 1:
-                return await interaction.response.send_message('Starting index must be greater than zero.',
+                return await interaction.response.send_message("Starting index must be greater than zero.",
                                                                ephemeral=True)
 
             # If either of the indexes are greater than the length of the queue, it's an invalid format
             for x in indexes:
                 if x > len(player.queue):
-                    return await interaction.response.send_message('Indexes must be less than or equal to the length '
-                                                                   'of the queue.', ephemeral=True)
+                    return await interaction.response.send_message("Indexes must be less than or equal to the length "
+                                                                   "of the queue.", ephemeral=True)
 
             # If the starting index is greater than the ending index, it's an invalid format
             if indexes[0] > indexes[1]:
-                return await interaction.response.send_message('The starting index must be less than the ending index.', ephemeral=True)
+                return await interaction.response.send_message("The starting index must be less than the ending index.",
+                                                               ephemeral=True)
 
             # Create a variable to store the count of items removed from the queue
             count: int = 0
@@ -805,15 +901,15 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
             # Send notifying message, with stylization
             if count == 1:
-                await interaction.response.send_message(f'Removed one item from queue.', ephemeral=True)
+                await interaction.response.send_message(f"Removed one item from queue.", ephemeral=True)
             else:
-                await interaction.response.send_message(f'Removed {count} items from queue.', ephemeral=True)
+                await interaction.response.send_message(f"Removed {count} items from queue.", ephemeral=True)
 
         # Log the command usage
         return log.logCommand(interaction)
 
     # Command: PlayerInfo
-    @app_commands.command(name='playerinfo', description='Shows information regarding the current track and queue.')
+    @app_commands.command(name="playerinfo", description="Shows information regarding the current track and queue.")
     async def playerInfo(self, interaction: discord.Interaction) -> None:
         # Check if maintenance mode is on
         if self.bot.maintenance_mode:
@@ -830,17 +926,11 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
         # Check if player is playing any tracks
         if not player.current:
-            return await interaction.response.send_message('No track is currently playing, and the queue is empty.', ephemeral=True)
+            return await interaction.response.send_message("No track is currently playing, and the queue is empty.", ephemeral=True)
 
         # Create vars
-        video_id = player.current.uri.replace('https://www.youtube.com/watch?v=', '')
-        thumbnail_url = f'https://img.youtube.com/vi/{video_id}/maxresdefault.jpg'
-
-        # Get loop status
-        if self.loop_track:
-            is_looping: str = 'Enabled'
-        else:
-            is_looping: str = 'Disabled'
+        video_id = player.current.uri.replace("https://www.youtube.com/watch?v=", '')
+        thumbnail_url = f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg"
 
         # Create the info embed
         embed = discord.Embed(
@@ -848,13 +938,13 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             description=f'**{player.current.title}**',
             color=discord.Color.from_rgb(1, 162, 186),
         )
-        embed.add_field(name='Track Length:', value=convertDuration(player.current.duration))
-        embed.add_field(name='Track Position:', value=convertDuration(player.position))
+        embed.add_field(name='Track Length:', value=millisecondsToTime(player.current.length))
+        embed.add_field(name='Track Position:', value=millisecondsToTime(player.position))
         embed.add_field(name='Author:', value=player.current.author)
         embed.add_field(name='URL:', value=player.current.uri, inline=False)
         embed.add_field(name='Current Queue Length:', value=len(player.queue))
         embed.add_field(name='Volume:', value=player.volume)
-        embed.add_field(name='Looping:', value=is_looping)
+        embed.add_field(name='Looping:', value=("Enabled" if self.loop_track else "Disabled"))
         embed.set_image(url=thumbnail_url)
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -862,8 +952,9 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         return log.logCommand(interaction)
 
     # Command: QueueInfo
-    @app_commands.command(name='queuelist', description='Shows a list of items in the queue. Syntax: "/queuelist (page)"')
-    @app_commands.describe(page='The page of the queue list to show. Defaults to one.')
+    @app_commands.command(name="queuelist", description="Shows a list of items in the queue. "
+                                                        "Syntax: \"/queuelist (page)\"")
+    @app_commands.describe(page="The page of the queue list to show. Defaults to one.")
     async def queueList(self, interaction: discord.Interaction, page: int = 1) -> None:
         # Check if maintenance mode is on
         if self.bot.maintenance_mode:
@@ -880,7 +971,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
         # Check if the queue is empty
         if not player.queue:
-            return await interaction.response.send_message('The queue is currently empty.', ephemeral=True)
+            return await interaction.response.send_message("The queue is currently empty.", ephemeral=True)
 
         # Create a var containing the maximum amount of pages, which is the queue length divided by 5 with no
         # remainder, plus one, unless the length of the queue is 5 exactly, then it's hard set to one
@@ -889,16 +980,17 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         # Check if the given page number is greater than the maximum amount of pages
         if page > max_pages:
             return await interaction.response.send_message(
-                f'The input page number {page} is higher than the available amount of pages, {max_pages}.', ephemeral=True)
+                f"The input page number {page} is higher than the available amount of pages, {max_pages}.",
+                ephemeral=True)
 
         # Set the embed title to include the page number if the queue's longer than 5, otherwise don't include it
-        embed_title: str = f'Queue - Page {page}' if len(player.queue) > 5 else 'Queue'
+        embed_title: str = f"Queue - Page {page}" if len(player.queue) > 5 else "Queue"
 
         # Create the embed
         embed = discord.Embed(
             title=embed_title,
             # Some spaghetti stylization code
-            description=f'There are currently {len(player.queue)} tracks in queue.' if len(player.queue) > 1 else 'There is currently one track in queue.',
+            description=f"There are currently {len(player.queue)} tracks in queue." if len(player.queue) > 1 else "There is currently one track in queue.",
             color=discord.Color.from_rgb(1, 162, 186)
         )
 
@@ -906,13 +998,13 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         for i in range((page - 1) * 5, min(page * 5, len(player.queue))):
             # Add the item to the embed
             embed.add_field(
-                name=f'Track {i + 1}:',
-                value=f'[{player.queue[i].title}]({player.queue[i].uri})',
+                name=f"Track {i + 1}:",
+                value=f"[{player.queue[i].title}]({player.queue[i].uri})",
                 inline=False
             )
 
         # Set the footer to show current page, and max pages
-        embed.set_footer(text=f'Page {str(page)} of {str(max_pages)}')
+        embed.set_footer(text=f"Page {str(page)} of {str(max_pages)}")
 
         # Send the list
         await interaction.response.send_message(embed=embed, ephemeral=True)
@@ -921,9 +1013,11 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         return log.logCommand(interaction)
 
     # Command: SkipTo
-    @app_commands.command(name='skipto', description='Skip to a specific song in queue.')
-    @app_commands.describe(index='The index of the song you want to skip to.')
-    @app_commands.describe(remove_preceding_songs='Whether you want to remove all songs preceding the specified song in the queue.')
+    @app_commands.command(name="skipto", description="Skip to a specific song in queue.")
+    @app_commands.describe(index="The index of the song you want to skip to. You can get this using the /queuelist "
+                                 "command.")
+    @app_commands.describe(remove_preceding_songs="Whether you want to remove all songs preceding the specified song "
+                                                  "in the queue.")
     async def skipTo(self, interaction: discord.Interaction, index: int, remove_preceding_songs: bool = False):
         # Check if maintenance mode is on
         if self.bot.maintenance_mode:
@@ -938,82 +1032,41 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         if not player:
             return
 
-        return await interaction.response.send_message('This command is a work-in-progress!', ephemeral=True)
-
         # Skip current song, if playing
-        await player.seek(player.current.duration * 1000)
-        # And unpause player, if paused
-        if player.is_paused():
-            await player.resume()
+        await player.seek(player.current.length * 1000)
 
-        # WORK ON THE FOLLOWING; CODE IS NOT WORKING!
+        # Resume playback if paused
+        await player.pause(False)
 
         # If remove preceding songs, remove all songs before the specified song, including the specified song
         if remove_preceding_songs:
-            track_to_seek_to = player.queue.__getitem__(index=index)
-            print(track_to_seek_to.title)
+            track_to_seek_to: wavelink.Playable = player.queue.get_at(index - 1)
 
-            # (using index + 2 because +1 only goes to the number specified, and we need to go one number higher to
-            # remove the specified song from further in the queue)
-            for x in reversed(range(0, index)):
-                player.queue.__delitem__(x)
+            # Reversing this so the indexes don't change as items get deleted
+            for x in reversed(range(0, index - 1)):
+                player.queue.delete(x)
 
-            player.queue.put_at_front(track_to_seek_to)
+            # Put the specified track at the front of the queue
+            player.queue.put_at(0, track_to_seek_to)
 
             # Send notifying message
             await interaction.response.send_message(
-                f'Skipped to track [{track_to_seek_to.title}]({track_to_seek_to.uri}), removing preceeding items in queue.', ephemeral=True)
+                f"Skipped to track [{track_to_seek_to.title}]({track_to_seek_to.uri}), removing preceeding items in queue.", ephemeral=True)
 
         # Otherwise, just skip to the song without removing anything from queue
         else:
             # Get the track in the queue to skip to
-            track_to_seek_to = player.queue.__getitem__(index=index + 1)
-            print(type(track_to_seek_to))
+            track_to_seek_to: wavelink.Playable = player.queue.get_at(index - 1)
+
+            # Delete the track from the queue
+            player.queue.delete(index)
 
             # Put said track in the front of the queue
-            player.queue.put_at_front(track_to_seek_to)
-            # And delete the track from the queue
-            player.queue.__delitem__(index + 1)
+            player.queue.put_at(0, track_to_seek_to)
 
             # Send notifying message
             await interaction.response.send_message(
-                f'Skipped to track [{track_to_seek_to.title}]({track_to_seek_to.uri}).', ephemeral=True)
-
-        # Log command usage
-        return log.logCommand(interaction)
-
-    # Command: Move
-    @app_commands.command(name='move', description='Move the bot from one VC to another. Only usable by staff.')
-    @discord.app_commands.checks.has_permissions(move_members=True)
-    async def move(self, interaction: discord.Interaction) -> None:
-        # Check if maintenance mode is on
-        if self.bot.maintenance_mode:
-            return
-
-        # I'm not using the runChecks function here because the conditions are different
-        user_vc = interaction.user.voice
-        bot_vc = interaction.guild.voice_client
-
-        # Bot not connected to VC
-        if not bot_vc:
-            return await interaction.response.send_message('I am not connected to a voice channel.', ephemeral=True)
-
-        # User not connected to VC
-        if not user_vc:
-            return await interaction.response.send_message('You must be connected to a voice channel to use this command.',
-                                                           ephemeral=True)
-
-        if user_vc.channel == bot_vc.channel:
-            return await interaction.response.send_message('I\'m already in the same channel as you.', ephemeral=True)
-
-        # Try to get the player
-        player: wavelink.Player = await checkPlayer(interaction, 'No music player is currently running. Use the play '
-                                                                 'command to play music in your current voice chat.')
-        if not player:
-            return
-
-        await player.move_to(user_vc.channel)
-        await interaction.response.send_message(f'Moved to voice channel "{user_vc.channel.name}."', ephemeral=True)
+                f"Skipped to track [{track_to_seek_to.title}]({track_to_seek_to.uri}).", ephemeral=True)
 
         # Log command usage
         return log.logCommand(interaction)

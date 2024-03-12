@@ -194,12 +194,12 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
         super().__init__()
 
         # Vars
-        self.image_scanner_cog_instance = self.bot.get_cog('ImageScanner')
-        self.file_scanner_cog_instance = self.bot.get_cog('FileScanner')
-        self.spam_prevention_cog_instance = self.bot.get_cog('SpamPrevention')
         self.leet_variant_dict: dict = {}
         self.triggering_blocked_word: str = ""
         self.triggering_word: str = ""
+        self.image_scanner_cog_instance = None
+        self.file_scanner_cog_instance = None
+        self.spam_prevention_cog_instance = None
 
     def scanText(self, text_input: str) -> bool:
         """
@@ -308,6 +308,12 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
         for word in self.blocked_words:
             self.leet_variant_dict.update(generateLeetspeakVariants(word))
         logandprint.info(f"Done!")
+
+        # Load instances of other cogs. (I'm putting this in on_ready instead of __init__ because placing it in init
+        # may try to load cogs before they're loaded. Placing them here will wait till all cogs are loaded.
+        self.image_scanner_cog_instance = self.bot.get_cog("ImageScanner")
+        self.file_scanner_cog_instance = self.bot.get_cog("FileScanner")
+        self.spam_prevention_cog_instance = self.bot.get_cog("SpamPrevention")
 
         # Log cog being ready
         logandprint.logCogLoad(self.__class__.__name__)
@@ -482,10 +488,9 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
             #    if await file_scanner_cog_instance.scanAttachedFiles(message):
             #        ...handle virus
 
-        # TODO: Fix the spam prevention system
         # Fourth scan: Spam prevention
-        # if spam_prevention_cog_instance:
-        #    await spam_prevention_cog_instance.checkForSpam(message)
+        if self.spam_prevention_cog_instance:
+            await self.spam_prevention_cog_instance.checkForSpam(message)
 
         return
 

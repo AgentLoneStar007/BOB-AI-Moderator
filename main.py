@@ -13,9 +13,8 @@ from dotenv import load_dotenv
 import asyncio
 import os
 import aiohttp.client_exceptions
-from transformers import AutoModelForImageClassification
 from utils.logger import Log, LogAndPrint, initLoggingUtility
-from utils.bot_utils import defIntents, sendMessage, loadExtensions
+from utils.bot_utils import defIntents, sendMessage, loadExtensions, loggingMention
 
 # Vars
 load_dotenv()
@@ -66,13 +65,11 @@ class Bot(commands.Bot):
     # On bot ready...
     async def on_ready(self) -> None:
         # Print a message to the console and log ready event
-        print(f'''
-\033[32m------------------------------
+        print(f"""\033[32m------------------------------
 \033[36m\033[01m{self.user.name}\033[0m\033[32m is online and ready.
 Bot ID: \033[37m\033[04m{self.user.id}\033[0m\033[32m
 Custom Status: \033[37m\033[04m"{custom_status}"\033[0m\033[32m
-------------------------------\033[0m
-''')
+------------------------------\033[0m""")
         log.info(f'{self.user.name} is online and ready.')
 
         # Change the bots' status
@@ -84,8 +81,8 @@ Custom Status: \033[37m\033[04m"{custom_status}"\033[0m\033[32m
 
     # Create setup hook for Wavelink music player
     async def setup_hook(self) -> None:
-        node: wavelink.Node = wavelink.Node(uri='http://localhost:2333', password=LAVALINK_PASSWORD)
-        await wavelink.NodePool.connect(client=self, nodes=[node])
+        nodes = [wavelink.Node(uri="http://127.0.0.1:2333", password=LAVALINK_PASSWORD)]
+        await wavelink.Pool.connect(nodes=nodes, client=self, cache_capacity=None)
 
     # Add a handler for anyone trying to use old command system
     async def on_command_error(self, ctx, error) -> None:
@@ -147,30 +144,43 @@ async def run() -> None:
     async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
         # Handler for missing permissions
         if isinstance(error, app_commands.MissingPermissions):
-            logandprint.info(f'User {interaction.user.name} was unable to run command "{interaction.command.name}" due to insufficient permissions.', source='d')
-            return await interaction.response.send_message('You don\'t have permission to use this command.', ephemeral=True)
+            log.info(f"User {loggingMention(interaction.user)} was unable to run command "
+                             f"\"{interaction.command.name}\" due to insufficient permissions.", source='d')
+            return await interaction.response.send_message("You don't have permission to use this command.",
+                                                           ephemeral=True)
 
         if isinstance(error, app_commands.CommandOnCooldown):
-            logandprint.warning(f'User {interaction.user.name} was unable to run command "{interaction.command.name}" because it\'s'
-                  ' on cooldown.', source='d')
+            log.info(f"User {loggingMention(interaction.user)} was unable to run command"
+                     f"\"{interaction.command.name}\" because it's on cooldown.", source='d')
             return await interaction.response.send_message(f'This command is on cooldown!', ephemeral=True)
 
         # TODO: Add a specific error message when the bot is unable to respond to an interaction because it timed out.
+
         # Handler for failing to respond to an interaction quickly enough
         if isinstance(error, discord.app_commands.CommandInvokeError):
-            return logandprint.error(f"Failed to respond to command \"{interaction.command.name}\" run by"
-                         f" {interaction.user.display_name} because the interaction either timed out or failed. Error: {error}", source='d')
-
-        # So far no other handlers are required, because AppCommands automatically requires correct argument types
-        # and "CommandNotFound" errors are (to my knowledge) impossible with slash commands.
+            logandprint.error(f"Failed to respond to command \"{interaction.command.name}\" run by "
+                              f"{loggingMention(interaction.user)} because the interaction either timed out or failed."
+                              f" Error: {error}", source='d')
+            try:
+                return await interaction.response.send_message("An error occurred when trying to run that command:"
+                                                               f"\n```{error}```", ephemeral=True)
+            except Exception as error:
+                log.error(f"Failed to send notifying error message in Discord with the following error: {error}")
+                return
+        # Handler for a command not being found
+        if isinstance(error, app_commands.CommandNotFound) or "app_commands.CommandNotFound" in error:  # <-- really shoddy fix
+            logandprint.info(f"User {loggingMention(interaction.user)} was unable to run a command because it "
+                             f"doesn't exist. Error: {error}", source='d')
+            return await interaction.response.send_message("This command either doesn't exist, or wasn't loaded "
+                                                           "properly.", ephemeral=True)
 
         # General error handler
         else:
             # Defining the error message as a variable for optimization
-            logandprint.error(f'An error occurred when the user {interaction.user.display_name} tried to run the command'
-                              f' {interaction.command.name}: "{type(error)}: {error}"', source='d')
+            logandprint.error(f"An error occurred when the user {interaction.user.display_name} tried to run"
+                              f" the command {interaction.command.name}: \"{type(error)}: {error}\"", source='d')
             return await interaction.response.send_message(
-                f'An error occurred when trying to run that command:\n```{error}```', ephemeral=True)
+                f"An error occurred when trying to run that command:\n```{error}```", ephemeral=True)
 
     # Load extensions and start bot, all in time with the bot itself
     async with bot:
@@ -185,11 +195,14 @@ def main() -> int:
     except KeyboardInterrupt:
         logandprint.info('Shutting down!')
         return 0
+    except wavelink.NodeException as error:
+        logandprint.fatal(f"Failed to connect to a Lavalink node with the following error: {error}")
+        return 1
     except aiohttp.client_exceptions.ClientConnectorError:
         logandprint.fatal(f'B.O.B was unable to connect to either the Internet or Discord. Check your connection.')
         return 1
-    except Exception as e:
-        logandprint.fatal(f'B.O.B encountered a critical error and had to shut down! Error: {e}')
+    except Exception as error:
+        logandprint.fatal(f'B.O.B encountered a critical error and had to shut down! Error: {error}')
         return 1
 
 
