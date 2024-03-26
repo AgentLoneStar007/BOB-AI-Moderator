@@ -22,16 +22,15 @@ BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 OWNER_ID = int(os.getenv("BOT_OWNER_ID"))
 BOT_OUTPUT_CHANNEL = os.getenv("BOT_OUTPUT_CHANNEL")
 LAVALINK_PASSWORD = os.getenv("LAVALINK_PASSWORD")
-custom_status = 'Use "/help" for help.'
+custom_status = "Use \"/help\" for help."
 
-# TODO: Add interactive console for bot
-# TODO(maybe): Put that console in a web dashboard
-# TODO: Finish implementing updated log system
-# TODO: Add an update system for BOB that pulls files from the GitHub repo
+# TODO: Add a web dashboard
+# TODO: Add an update system for BOB
 # TODO: Add a system to scan even text files for bad content
 # TODO: Add a system that uses VirusTotal to scan URLs
-# TODO: Check into using latest version of Wavelink
-# TODO: Utilize the new cleanup() function in every place possible
+# TODO: Add a system that will prevent new users from doing certain actions
+#  until they've been in the server long enough to be "trusted."
+# TODO(eventually): Determine if maintenance mode needs to be removed
 
 # Init log system
 initLoggingUtility()
@@ -49,11 +48,11 @@ class Bot(commands.Bot):
 
         # Set some bot values and PrettyHelp values
         super().__init__(
-            command_prefix='!', owner_id=OWNER_ID, intents=defIntents(), help_command=PrettyHelp(
+            command_prefix=None, owner_id=OWNER_ID, intents=defIntents(), help_command=PrettyHelp(
                 color=discord.Color.from_rgb(1, 162, 186),
-                index_title='B.O.B Help Menu',
+                index_title="B.O.B Help Menu",
 
-                thumbnail_url='https://cdn.discordapp.com/avatars/1154825794963640390/ff31b0d57ab76713dba89da69a16fe35.webp?size=4096&width=913&height=913',
+                thumbnail_url="https://cdn.discordapp.com/avatars/1154825794963640390/ff31b0d57ab76713dba89da69a16fe35.webp?size=4096&width=913&height=913",
                 menu=pretty_help.AppMenu(ephemeral=True)
 
             ))
@@ -70,14 +69,14 @@ class Bot(commands.Bot):
 Bot ID: \033[37m\033[04m{self.user.id}\033[0m\033[32m
 Custom Status: \033[37m\033[04m"{custom_status}"\033[0m\033[32m
 ------------------------------\033[0m""")
-        log.info(f'{self.user.name} is online and ready.')
+        log.info(f"{self.user.name} is online and ready.")
 
         # Change the bots' status
         await self.change_presence(status=discord.Status.online, activity=discord.CustomActivity(custom_status))
 
         # Activate background task
         self.checkIfMaintenanceModeActive.start()
-        return logandprint.info('Started background task "Check If Maintenance Mode is Active."')
+        return logandprint.info("Started background task \"Check If Maintenance Mode is Active.\"")
 
     # Create setup hook for Wavelink music player
     async def setup_hook(self) -> None:
@@ -86,8 +85,8 @@ Custom Status: \033[37m\033[04m"{custom_status}"\033[0m\033[32m
 
     # Add a handler for anyone trying to use old command system
     async def on_command_error(self, ctx, error) -> None:
-        message = ('I don\'t support regular bot commands. Instead, I use Discord\'s built-in app commands! Use '
-                   '`/help` for a list of available commands.')
+        message = ("I don't support regular bot commands. Instead, I use Discord's built-in app commands! Use "
+                   "`/help` for a list of available commands.")
         return await ctx.send(message)
 
     # Task: Check if maintenance mode is active
@@ -103,14 +102,14 @@ Custom Status: \033[37m\033[04m"{custom_status}"\033[0m\033[32m
 
             # Update the bots' status
             await self.change_presence(status=discord.Status.do_not_disturb, activity=discord.CustomActivity(
-                'MAINTENANCE MODE ACTIVE'))
+                "MAINTENANCE MODE ACTIVE"))
 
             # Send a notifying message to staff
             if not self.already_sent_maintenance_mode_notify:
-                logandprint.warning('MAINTENANCE MODE IS ACTIVE!')
+                logandprint.warning("MAINTENANCE MODE IS ACTIVE!")
 
-                await sendMessage(self, BOT_OUTPUT_CHANNEL, 'MAINTENANCE MODE ACTIVATED! All moderation systems'
-                                                            ' and utilities are offline!')
+                await sendMessage(self, BOT_OUTPUT_CHANNEL, "MAINTENANCE MODE ACTIVATED! All moderation systems"
+                                                            " and utilities are offline!")
                 # Update this variable to prevent sending the message multiple times
                 self.already_sent_maintenance_mode_notify = True
 
@@ -123,12 +122,12 @@ Custom Status: \033[37m\033[04m"{custom_status}"\033[0m\033[32m
 
             if bot_member:
                 # If the status is not online,
-                if str(bot_member.status) != 'online':
+                if str(bot_member.status) != "online":
                     # Update it to online
                     await self.change_presence(status=discord.Status.online, activity=discord.CustomActivity(custom_status))
 
                     # Log that maintenance mode is no longer active
-                    logandprint.info('Maintenance mode is no longer active.')
+                    logandprint.info("Maintenance mode is no longer active.")
 
         return
 

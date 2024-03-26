@@ -13,39 +13,15 @@ from utils.logger import Log, LogAndPrint
 #  Wavelink has audio leveling systems I can use)
 # TODO: Find a way to prevent people from playing videos with blocked words in the title(maybe)
 # TODO: Add a command to loop the current queue called /loopqueue
+# TODO: Fix bug in /playerinfo command where hours are not shown correctly, and verify there are no other broken
+#  time formatting strings
 
 # Create object of Log and LogAndPrint class
 log = Log()
 logandprint = LogAndPrint()
 
 
-# The following three functions were written by ChatGPT. I know; shut up.
-def convertDuration(milliseconds) -> str:
-    """
-    Converts an
-
-    :param milliseconds:
-    :return:
-    """
-
-    # Convert milliseconds to seconds
-    seconds: int = milliseconds / 1000
-
-    # Create a timedelta object representing the duration
-    duration = datetime.timedelta(seconds=seconds)
-
-    # Format the duration as HH:MM:SS, even if hours exceed 99
-    hours, remainder = divmod(duration.total_seconds(), 3600)
-    minutes, seconds = divmod(remainder, 60)
-
-    if int(hours) == 0:
-        formatted_time: str = f"{int(minutes):02}:{int(seconds):02}"
-    else:
-        formatted_time: str = f"{int(hours):02}:{int(minutes):02}:{int(seconds):02}"
-
-    return formatted_time
-
-
+# The following three functions were partially written by AI. I know; shut up.
 def padTimeFormat(input_str: str) -> str | bool:
     """
     A function that converts an input string of time that's roughly in the format of
@@ -92,13 +68,16 @@ def millisecondsToTime(milliseconds: int) -> str:
     :raises None:
     """
 
-    seconds = int(milliseconds / 1000)
-    minutes = int(seconds / 60) % 60
+    # Convert milliseconds to seconds
+    seconds = milliseconds // 1000
+
+    # Calculate minutes and remaining seconds
+    minutes = seconds // 60
     remaining_seconds = seconds % 60
 
     # Check if hours are needed (more than 60 minutes)
     if minutes >= 60:
-        hours = int(minutes / 60)
+        hours = minutes // 60
         minutes = minutes % 60
         # Return the string with the hours field
         return f"{hours:02d}:{minutes:02d}:{remaining_seconds:02d}"
@@ -182,10 +161,6 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
     def __init__(self, bot) -> None:
         self.bot = bot
 
-        # Vars
-        self.loop_track: bool = False
-        self.current_track: wavelink.Playable | None = None
-
     # Listener: On Ready
     @commands.Cog.listener()
     async def on_ready(self) -> None:
@@ -193,6 +168,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         self.checkIfConnectedToVoiceChannel.start()
         return logandprint.info('Started background task "Check If Connected to Voice Channel."')
 
+    # TODO: Try to change out this system with Wavelink's new timeout counter system
     # Task: Check if connected to voice channel
     @tasks.loop(minutes=5.0)
     async def checkIfConnectedToVoiceChannel(self) -> None:
@@ -241,28 +217,6 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         # Wait till bot is ready before starting task
         return await self.bot.wait_until_ready()
 
-    # Listener: On Track End
-    @commands.Cog.listener()
-    async def on_wavelink_track_end(self, payload: wavelink.TrackEndEventPayload) -> None:
-        # Check if maintenance mode is on
-        if self.bot.maintenance_mode:
-            return
-
-        # Create player object
-        player: wavelink.Player = payload.player
-
-        # Loop current track if loop is enabled
-        if self.loop_track:
-            await player.play(self.current_track)
-            return
-
-        # Go to the next song in the queue on track end if queue isn't empty
-        if not player.queue.is_empty:
-            next_track = player.queue.get()
-            self.current_track = next_track
-            await player.play(next_track)
-        return
-
     # Command: Play
     @app_commands.command(name='play', description='Play a YouTube video in a voice chat. Syntax: "/play <URL or search term>"')
     @app_commands.describe(query='The search term or YouTube video or playlist URL to play.')
@@ -279,7 +233,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             return await interaction.response.send_message("You are not connected to a voice channel.", ephemeral=True)
 
         # Check if player is already running. If not, create a new player
-        if not interaction.client.voice_clients:
+        if not interaction.guild.voice_client:
             player: wavelink.Player = await interaction.user.voice.channel.connect(cls=wavelink.Player)
         else:
             # If player is running, check if bot is in a different VC than user with music playing
@@ -292,6 +246,11 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
                 await player.move_to(user_vc.channel)
 
         await interaction.response.send_message(f"Loading your query of `{query}`, please wait...", ephemeral=True)
+
+        # Enable autoplay of next track in queue
+        # This code needs refactoring if I ever introduce a different autoplay system
+        if player.autoplay != wavelink.AutoPlayMode.partial:
+            player.autoplay = wavelink.AutoPlayMode.partial
 
         # If query is playlist URL
         if "https://" and "list=" in query:
@@ -366,9 +325,6 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
                 # Unpause the player, if paused
                 await player.pause(False)
 
-                # Update the current_track var with the now playing track
-                self.current_track = playlist_tracks[0]
-
                 # Add all items to queue, excluding the first song(which is the one that will start playing immediately)
                 for track in playlist_tracks[1:]:
                     player.queue.put(track)
@@ -404,7 +360,6 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
             # Add track to queue if a track is already playing
             if player.current:
-                # There's probably a more efficient way to go about the embeds, but I'll do it later
                 player.queue.put(track)
 
                 # Get time left before track plays
@@ -420,9 +375,9 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
                     description=f"Song added to queue for channel {player.channel}.",
                     color=discord.Color.from_rgb(1, 162, 186)
                 )
-                embed.add_field(name="Length:", value=convertDuration(track.length))
+                embed.add_field(name="Length:", value=millisecondsToTime(track.length))
                 embed.add_field(name="Author:", value=track.author)
-                embed.add_field(name="Time Before Track Plays:", value=convertDuration(time_left))
+                embed.add_field(name="Time Before Track Plays:", value=millisecondsToTime(time_left))
                 embed.set_image(url=thumbnail_url)
                 await interaction.edit_original_response(embed=embed, content="")
 
@@ -434,9 +389,6 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
                 # Unpause player, if paused
                 await player.pause(False)
 
-                # Update the current_track var
-                self.current_track = track
-
                 # Create the embed
                 embed = discord.Embed(
                     title=track.title,
@@ -444,7 +396,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
                     description=f"Now playing in {player.channel}.",
                     color=discord.Color.from_rgb(1, 162, 186)
                 )
-                embed.add_field(name="Length:", value=convertDuration(track.length))
+                embed.add_field(name="Length:", value=millisecondsToTime(track.length))
                 embed.add_field(name="Author:", value=track.author)
                 embed.set_image(url=thumbnail_url)
                 await interaction.edit_original_response(embed=embed, content="")
@@ -468,31 +420,29 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         if not player:
             return
 
-        # Disable looping, if enabled
-        if self.loop_track:
-            self.loop_track = False
-
         # Stop playback if queue is empty
-        if player.queue.is_empty:
+        if player.queue.is_empty and player.queue.mode != wavelink.QueueMode.loop_all:
+            # Update loop setting
+            player.queue.mode = wavelink.QueueMode.normal
+
             # Stop playback
             await player.stop()
 
-            # Remove current playing track var (for loop command)
-            # TODO: Test the following. It may cause an error.
-            self.current_track = None
-
             # Respond to command
-            await interaction.response.send_message("Playback was stopped because there are no remaining songs in the"
+            await interaction.response.send_message("Playback was stopped because there are no remaining songs in the "
                                                     "queue.", ephemeral=True)
 
             # Log the command
             return log.logCommand(interaction)
 
-        # Skip current song in queue
-        await player.seek(player.current.length)
+        # Send the feedback before skipping to prevent issues
+        await interaction.response.send_message(f"Skipped track **\"{player.current.title}.\"**", ephemeral=True)
+        # Skip current track
+        await player.skip(force=True)  # Usage of "force" disables looping, if enabled
         # Resume playback if paused
         await player.pause(False)
-        await interaction.response.send_message(f"Skipped track **\"{player.current.title}.\"**", ephemeral=True)
+        # Log the command
+        return log.logCommand(interaction)
 
     # Command: Stop
     @app_commands.command(name="stop", description="Stops the music player and clears the queue.")
@@ -510,26 +460,22 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         if not player:
             return
 
-        # Disable looping, if enabled
-        if self.loop_track:
-            self.loop_track = False
-
         # Resume playback if paused
         await player.pause(False)
 
         # Empty queue
         player.queue.reset()
 
+        # Disable looping
+        player.queue.mode = wavelink.QueueMode.normal
+
         # Stop playback
         await player.stop()
-
-        # Remove current playing track var (for loop command)
-        self.current_track = None
 
         await interaction.response.send_message("Stopped music playback.", ephemeral=True)
         return log.logCommand(interaction)
 
-    # Command: Resume
+    # Command: TogglePause
     @app_commands.command(name="togglepause", description="Toggles whether the player is paused or not.")
     async def togglePause(self, interaction: discord.Interaction) -> None:
         # Check if maintenance mode is on
@@ -578,7 +524,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
                                                                      " you're in the same voice channel as me."):
             return
 
-        # Check if volume is in acceptable parameters (or if it's me, so I can set the volume to whatever I want)
+        # Check if volume is in acceptable parameters (or if it's me, so I can set the volume to whatever I want lol)
         if 1 <= volume <= 100 or interaction.user.id == self.bot.owner_id and volume >= 1:
             # Check if player is running
             player: wavelink.Player = await checkPlayer(interaction)
@@ -620,18 +566,19 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         rewind_time = rewind_time * 1000
 
         # If the rewind time is greater than time left before current position,
-        if rewind_time > int(player.current.length):
+        if rewind_time >= int(player.position):
             # Restart song playback
             await player.seek(0)
             await interaction.response.send_message("Restarted playback.", ephemeral=True)
             return log.logCommand(interaction)
 
         # Rewind the player
-        position_to_rewind_to = int(player.position - rewind_time)
+        position_to_rewind_to: int = int(player.position - rewind_time)
         await player.seek(position_to_rewind_to)
 
         # Notify the user
-        await interaction.response.send_message(f"Rewound player to position `{convertDuration(position_to_rewind_to)}`.", ephemeral=True)
+        await interaction.response.send_message("Rewound player to position "
+                                                f"`{millisecondsToTime(position_to_rewind_to)}`.", ephemeral=True)
 
         # Log the usage
         return log.logCommand(interaction)
@@ -662,7 +609,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         ff_time: int = fastforward_time * 1000
 
         # If the fastforward time is greater than time left in video...
-        if ff_time > int(player.current.length):
+        if ff_time >= int(player.current.length) - int(player.position):
             # Skip to the next song in queue. Stop playback if queue is empty
             if player.queue.is_empty:
                 await interaction.response.send_message("Stopping playback because there's no more songs in the queue.",
@@ -670,7 +617,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
                 await player.stop()
                 return log.logCommand(interaction)
 
-            await player.seek(player.current.length * 1000)
+            await player.skip(force=True)
             await interaction.response.send_message("Skipping to the next track in queue.", ephemeral=True)
             return log.logCommand(interaction)
 
@@ -679,7 +626,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         await player.seek(position_to_ff_to)
 
         # Notify the user
-        await interaction.response.send_message(f"Fast-forwarded player to position `{convertDuration(position_to_ff_to)}`.",
+        await interaction.response.send_message(f"Fast-forwarded player to position `{millisecondsToTime(position_to_ff_to)}`.",
                                                 ephemeral=True)
 
         # Log the usage
@@ -737,7 +684,66 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
                                                     "`/help seek` for more information.", ephemeral=True)
             return
 
-    # Command: Loop
+    # Command: SkipTo
+    @app_commands.command(name="skipto", description="Skip to a specific song in queue.")
+    @app_commands.describe(index="The index of the song you want to skip to. You can get this using the /queuelist "
+                                 "command.")
+    @app_commands.describe(remove_preceding_songs="Whether you want to remove all songs preceding the specified song "
+                                                  "in the queue.")
+    async def skipTo(self, interaction: discord.Interaction, index: int, remove_preceding_songs: bool = False):
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
+            return
+
+        # Run checks
+        if not await runChecks(interaction):
+            return
+
+        # Check if player is running
+        player: wavelink.Player = await checkPlayer(interaction)
+        if not player:
+            return
+
+        # Skip current song, if playing
+        await player.seek(player.current.length * 1000)
+
+        # Resume playback if paused
+        await player.pause(False)
+
+        # If remove preceding songs, remove all songs before the specified song, including the specified song
+        if remove_preceding_songs:
+            track_to_seek_to: wavelink.Playable = player.queue.get_at(index - 1)
+
+            # Reversing this so the indexes don't change as items get deleted
+            for x in reversed(range(0, index - 1)):
+                player.queue.delete(x)
+
+            # Put the specified track at the front of the queue
+            player.queue.put_at(0, track_to_seek_to)
+
+            # Send notifying message
+            await interaction.response.send_message(
+                f"Skipped to track [{track_to_seek_to.title}]({track_to_seek_to.uri}), removing preceeding items in queue.", ephemeral=True)
+
+        # Otherwise, just skip to the song without removing anything from queue
+        else:
+            # Get the track in the queue to skip to
+            track_to_seek_to: wavelink.Playable = player.queue.get_at(index - 1)
+
+            # Delete the track from the queue
+            player.queue.delete(index)
+
+            # Put said track in the front of the queue
+            player.queue.put_at(0, track_to_seek_to)
+
+            # Send notifying message
+            await interaction.response.send_message(
+                f"Skipped to track [{track_to_seek_to.title}]({track_to_seek_to.uri}).", ephemeral=True)
+
+        # Log command usage
+        return log.logCommand(interaction)
+
+    # Command: ToggleLoop
     @app_commands.command(name="toggleloop", description="Toggle looping the current track.")
     async def toggleLoop(self, interaction: discord.Interaction):
         # Check if maintenance mode is on
@@ -758,12 +764,44 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
             return await interaction.response.send_message("No track is currently playing.", ephemeral=True)
 
         # Toggle track loop
-        if not self.loop_track:
-            self.loop_track = True
+        if player.queue.mode != wavelink.QueueMode.loop:
+            player.queue.mode = wavelink.QueueMode.loop
             await interaction.response.send_message("Enabled looping of current track.", ephemeral=True)
         else:
-            self.loop_track = False
+            player.queue.mode = wavelink.QueueMode.normal
             await interaction.response.send_message("Disabled looping of current track.", ephemeral=True)
+
+        # Log the command usage
+        return log.logCommand(interaction)
+
+    # Command: ToggleQueueLoop
+    @app_commands.command(name="togglequeueloop", description="Toggle looping the entire queue.")
+    async def toggleQueueLoop(self, interaction: discord.Interaction):
+        # Check if maintenance mode is on
+        if self.bot.maintenance_mode:
+            return
+
+        # Run checks
+        if not await runChecks(interaction):
+            return
+
+        # Check if player is running
+        player: wavelink.Player = await checkPlayer(interaction)
+        if not player:
+            return
+
+        # Check if player is playing a track
+        if not player.current and player.queue.is_empty:
+            return await interaction.response.send_message("No track is currently playing, and the queue is empty.",
+                                                           ephemeral=True)
+
+        # Toggle track loop
+        if player.queue.mode != wavelink.QueueMode.loop_all:
+            player.queue.mode = wavelink.QueueMode.loop_all
+            await interaction.response.send_message("Enabled looping of the queue.", ephemeral=True)
+        else:
+            player.queue.mode = wavelink.QueueMode.normal
+            await interaction.response.send_message("Disabled looping of the queue.", ephemeral=True)
 
         # Log the command usage
         return log.logCommand(interaction)
@@ -926,11 +964,17 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
         # Check if player is playing any tracks
         if not player.current:
-            return await interaction.response.send_message("No track is currently playing, and the queue is empty.", ephemeral=True)
+            return await interaction.response.send_message("No track is currently playing.", ephemeral=True)
 
         # Create vars
         video_id = player.current.uri.replace("https://www.youtube.com/watch?v=", '')
         thumbnail_url = f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg"
+        if player.queue.mode == wavelink.QueueMode.loop:  # Create looping status variable
+            loop_mode: str = "Current Track"
+        elif player.queue.mode == wavelink.QueueMode.loop_all:
+            loop_mode: str = "Entire Queue"
+        else:
+            loop_mode: str = "Disabled"
 
         # Create the info embed
         embed = discord.Embed(
@@ -944,7 +988,7 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
         embed.add_field(name='URL:', value=player.current.uri, inline=False)
         embed.add_field(name='Current Queue Length:', value=len(player.queue))
         embed.add_field(name='Volume:', value=player.volume)
-        embed.add_field(name='Looping:', value=("Enabled" if self.loop_track else "Disabled"))
+        embed.add_field(name='Looping:', value=loop_mode)
         embed.set_image(url=thumbnail_url)
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -1008,65 +1052,6 @@ class Music(commands.Cog, description="Commands relating to the voice chat music
 
         # Send the list
         await interaction.response.send_message(embed=embed, ephemeral=True)
-
-        # Log command usage
-        return log.logCommand(interaction)
-
-    # Command: SkipTo
-    @app_commands.command(name="skipto", description="Skip to a specific song in queue.")
-    @app_commands.describe(index="The index of the song you want to skip to. You can get this using the /queuelist "
-                                 "command.")
-    @app_commands.describe(remove_preceding_songs="Whether you want to remove all songs preceding the specified song "
-                                                  "in the queue.")
-    async def skipTo(self, interaction: discord.Interaction, index: int, remove_preceding_songs: bool = False):
-        # Check if maintenance mode is on
-        if self.bot.maintenance_mode:
-            return
-
-        # Run checks
-        if not await runChecks(interaction):
-            return
-
-        # Check if player is running
-        player: wavelink.Player = await checkPlayer(interaction)
-        if not player:
-            return
-
-        # Skip current song, if playing
-        await player.seek(player.current.length * 1000)
-
-        # Resume playback if paused
-        await player.pause(False)
-
-        # If remove preceding songs, remove all songs before the specified song, including the specified song
-        if remove_preceding_songs:
-            track_to_seek_to: wavelink.Playable = player.queue.get_at(index - 1)
-
-            # Reversing this so the indexes don't change as items get deleted
-            for x in reversed(range(0, index - 1)):
-                player.queue.delete(x)
-
-            # Put the specified track at the front of the queue
-            player.queue.put_at(0, track_to_seek_to)
-
-            # Send notifying message
-            await interaction.response.send_message(
-                f"Skipped to track [{track_to_seek_to.title}]({track_to_seek_to.uri}), removing preceeding items in queue.", ephemeral=True)
-
-        # Otherwise, just skip to the song without removing anything from queue
-        else:
-            # Get the track in the queue to skip to
-            track_to_seek_to: wavelink.Playable = player.queue.get_at(index - 1)
-
-            # Delete the track from the queue
-            player.queue.delete(index)
-
-            # Put said track in the front of the queue
-            player.queue.put_at(0, track_to_seek_to)
-
-            # Send notifying message
-            await interaction.response.send_message(
-                f"Skipped to track [{track_to_seek_to.title}]({track_to_seek_to.uri}).", ephemeral=True)
 
         # Log command usage
         return log.logCommand(interaction)

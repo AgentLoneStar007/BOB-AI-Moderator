@@ -72,7 +72,7 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
         try:
             await self.bot.load_extension(f"cogs.{cog_name}")
             await interaction.response.send_message(
-                f"The cog \"{cog_name.title().replace('_', ' ')}\" was successfully mounted and started.",
+                f"The cog \"{cog_name.title().replace('_', ' ')}\" was successfully loaded and started.",
                 ephemeral=True)
             return logandprint.info(f"Loaded the cog \"{cog_name}\" successfully.")
         # Throw an error if failed
@@ -109,7 +109,7 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
         # Try to unload cog
         try:
             await self.bot.unload_extension(f"cogs.{cog_name}")
-            await interaction.response.send_message(f"The cog \"{cog_name.title().replace('_', ' ')}\" was"
+            await interaction.response.send_message(f"The cog \"{cog_name.title().replace('_', ' ')}\" was "
                                                     "successfully unloaded.", ephemeral=True)
             return logandprint.info(f"The cog \"{cog_name}\" was unloaded.")
 
@@ -118,7 +118,7 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
             # Throw a specific error if the cog hasn't been loaded
             if isinstance(e, discord.ext.commands.ExtensionNotLoaded):
                 return await interaction.response.send_message(f"The cog \"{cog_name}\" has not been loaded. Are you"
-                                                               "sure you spelled the name correctly?",
+                                                               " sure you spelled the name correctly?",
                                                                ephemeral=True)
             await interaction.response.send_message(f"An error occurred while unloading the cog \"{cog_name}\": ```{e}```")
             return logandprint.error(f"An error occurred while unloading the cog \"{cog_name}\": {e}")
@@ -141,7 +141,7 @@ class Miscellaneous(commands.Cog, description="Miscellaneous commands."):
         # Try to reload cog
         try:
             await self.bot.reload_extension(f"cogs.{cog_name}")
-            await interaction.response.send_message(f"The cog \"{cog_name.title().replace('_', ' ')}\" was"
+            await interaction.response.send_message(f"The cog \"{cog_name.title().replace('_', ' ')}\" was "
                                                     "successfully reloaded.", ephemeral=True)
             return logandprint.info(f"Reloaded cog \"{cog_name}.\"")
 

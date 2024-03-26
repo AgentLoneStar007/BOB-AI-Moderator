@@ -170,14 +170,13 @@ def tokenize(text: str) -> list:
 # TODO: Add cool-downs to commands to prevent spamming(which may or may not work)
 # TODO: Add nuke prevention
 # TODO(maybe): Add server lock command
-# TODO: Add an AI-powered image detection system that can detect blocked words in an image and NSFW content
+# TODO: Add an image detection system that can detect blocked words in an image and NSFW content
 # TODO: See if the above system can also work with videos, gifs, and so forth.
 # TODO: See if media with audio can be scanned using text-to-speech in order to detect blocked words/phrases.
 # TODO: Add a system that will scan user profile pictures using image detection system
 # TODO: Add the ability for BOB to run a server-wide scan either upon startup or upon request to scan all user statuses
 #  and profile pictures to verify they're not rule-breaking, because if someone updates their profile picture or status
 #  while BOB is offline, he won't detect the change and won't check for blocked words/images.
-# TODO: Add nickname scanning
 # TODO: Add command to remove a word or phrase from the blocklist
 # TODO: Make moderation system even smarter by taking into context previous messages to see if user is trying to
 #  bypass moderation system by typing blocked word across two messages
@@ -212,7 +211,7 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
             print("Blocked text found.")
 
         :param text_input: The text to scan.
-        :returns: True, False
+        :returns: *bool*
         :raises None:
         """
 
@@ -453,7 +452,7 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
             # first)
             if self.image_scanner_cog_instance:
                 try:
-                    result = await self.image_scanner_cog_instance.scanImage(message=message)
+                    result = await self.image_scanner_cog_instance.scanImage(guild_id=message.guild.id, message=message)
                     # If the media was deemed NSFW,
                     if result:
                         # Delete the message,
@@ -523,7 +522,9 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
                                           f" blocklist:** ||{self.triggering_blocked_word}||")
 
                 # Log the offense to console and logfile
-                logandprint.warning(f"User {loggingMention(after)} has a status containing a blocked word or phrase. Triggering word: \"{self.triggering_word}.\" Triggering word in blocklist: \"{self.triggering_blocked_word}.\"",
+                logandprint.warning(f"User {loggingMention(after)} has a status containing a blocked word or "
+                                    f"phrase. Triggering word: \"{self.triggering_word}.\" Triggering word in "
+                                    f"blocklist: \"{self.triggering_blocked_word}.\"",
                                     source='d')
 
             # Stop if no blocked words found
@@ -543,17 +544,25 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
         if self.bot.maintenance_mode:
             return
 
-        # TODO: Add handling for guild avatar update in this listener
         if before.guild_avatar != after.guild_avatar:
-            ...
+            try:
+                if await self.image_scanner_cog_instance.scanImage(guild_id=after.guild.id, avatar=after.guild_avatar):
+                    # Notify the user
+                    await after.send(f"{after.mention}, your guild avatar has been deemed NSFW. If this is in error, "
+                                     "please reach out to the server staff using `/question`. If you do not update your"
+                                     " profile picture, you will be kicked or banned from the server.")
+
+                    # Notify server staff
+                    await sendMessage(self.bot, self.bot_output_channel, f"User {after.mention} has a guild "
+                                                                         "avatar that has been deemed NSFW.")
+            # Handle if there was an error
+            except Exception as error:
+                logandprint.error(f"Failed to scan user {loggingMention(after)}'s guild avatar with the following"
+                                  f"error: {error}", source='d')
 
         # Check user nickname to see if it's changed
         if before.nick != after.nick:
-            # Create the formatted nickname variables using Regex
-            nick: str = re.sub(r"[^\w\s]", "",after.nick.lower().replace("_", " ").replace("-", " ").replace(".", " "))
-            nick_with_ints: str = re.sub(r"\W", "",after.nick.lower().replace("_", " ").replace("-", " ").replace(".", " "))
-
-            if self.scanText(nick) or self.scanText(nick_with_ints):
+            if self.scanText(after.nick):
                 await after.send(f"{after.mention}, your nickname contains a rule-breaking word or phrase."
                                  " If this is in error, please reach out to the server staff using `/question`."
                                  " If you do not update your nickname, you will be kicked or banned from the server.")
@@ -565,7 +574,9 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
                                           f" blocklist:** ||{self.triggering_blocked_word}||")
 
                 # Log the offense to console and logfile
-                logandprint.warning(f"User {loggingMention(after)} has a nickname containing a blocked word or phrase. Triggering word: \"{self.triggering_word}.\" Triggering word in blocklist: \"{self.triggering_blocked_word}.\"",
+                logandprint.warning(f"User {loggingMention(after)} has a nickname containing a blocked word or "
+                                    f"phrase. Triggering word: \"{self.triggering_word}.\" Triggering word in "
+                                    f"blocklist: \"{self.triggering_blocked_word}.\"",
                                     source='d')
 
             # Stop if no blocked words are found
@@ -580,18 +591,36 @@ class Moderation(commands.GroupCog, description='Commands relating to moderation
         # If the user's avatar has changed, scan it
         if before.avatar != after.avatar:
             try:
-                if await self.image_scanner_cog_instance.scanImage(image_url=after.avatar.url):
+                if await self.image_scanner_cog_instance.scanImage(guild_id=after.guild.id, avatar=after.avatar):
                     # Notify the user
-                    await after.send(f"{after.mention}, your avatar has been deemed NSFW. If this is in error, please reach"
-                                     " out to the server staff using `/question`. If you do not update your profile"
-                                     " picture, you will be kicked or banned from the server.")
+                    await after.send(f"{after.mention}, your avatar has been deemed NSFW. If this is in error, please "
+                                     "reach out to the server staff using `/question`. If you do not update your "
+                                     "profile picture, you will be kicked or banned from the server.")
 
                     # Notify server staff
-                    await sendMessage(self.bot, self.bot_output_channel, f"User {after.mention} has a profile picture that has been deemed NSFW.")
+                    await sendMessage(self.bot, self.bot_output_channel, f"User {after.mention} has a profile "
+                                                                         "picture that has been deemed NSFW.")
             # Handle if there was an error
             except Exception as error:
                 logandprint.error(f"Failed to scan user {loggingMention(after)}'s avatar with the following"
                                   f"error: {error}", source='d')
+
+        if before.banner != after.banner:
+            try:
+                if await self.image_scanner_cog_instance.scanImage(guild_id=after.guild.id, banner=after.avatar):
+                    # Notify the user
+                    await after.send(f"{after.mention}, your user banner has been deemed NSFW. If this is in error, "
+                                     "please reach out to the server staff using `/question`. If you do not update your"
+                                     " profile picture, you will be kicked or banned from the server.")
+
+                    # Notify server staff
+                    await sendMessage(self.bot, self.bot_output_channel, f"User {after.mention} has a profile "
+                                                                         "picture that has been deemed NSFW.")
+            # Handle if there was an error
+            except Exception as error:
+                logandprint.error(f"Failed to scan user {loggingMention(after)}'s avatar with the following"
+                                  f"error: {error}", source='d')
+
         return
 
     # Task: Check for users needing to be unbanned

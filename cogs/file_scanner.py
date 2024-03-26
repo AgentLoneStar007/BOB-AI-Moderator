@@ -13,6 +13,8 @@ import hashlib
 # TODO: Don't forget to add a system that cleans the download folder after the files are deemed safe and re-uploaded
 # TODO: Add a system that stores the totals of how many files have been scanned per minute, day, month, etc. in order
 #  to prevent exceeding the free API limits. Also make that system reset those counts when needed.
+# TODO: Look into zipbomb scanning by either using sandboxing or some antivirus software
+# TODO: Finish this entire system because I want to get it done before I work on other stuff
 
 # Vars
 load_dotenv()

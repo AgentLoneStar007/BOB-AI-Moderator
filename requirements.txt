@@ -13,3 +13,6 @@ torchvision
 torchaudio
 cairocffi
 cairosvg
+opencv-python
+pytesseract
+
